@@ -1,0 +1,6 @@
+{
+  "name": "Lumina TV Photo Frame",
+  "description": "Ambient digital photo frame for Android TV with auto-start on boot, smooth cross-fade slideshows, USB drive scanning, and offline-cached cloud photo sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

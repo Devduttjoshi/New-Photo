@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">Lumina TV Photo Frame</string>
+    <string name="tv_tagline">Ambient Slideshow &amp; Photo Frame</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+    <string name="settings">Settings</string>
+    <string name="slideshow">Slideshow</string>
+    <string name="photos_library">Photos Library</string>
+    <string name="usb_storage">USB Storage</string>
+    <string name="cloud_sync">Cloud Sync</string>
+    <string name="offline_cache">Offline Cache</string>
+    <string name="auto_start_on_boot">Auto-start on TV Boot</string>
+    <string name="auto_start_on_boot_desc">Automatically launch photo frame when Android TV starts up</string>
+    <string name="slide_interval">Slide Interval</string>
+    <string name="transition_speed">Cross-fade Speed</string>
+    <string name="motion_effect">Ken Burns Motion Effect</string>
+    <string name="show_clock">Show Clock &amp; Date</string>
+    <string name="show_metadata">Show Photo Details</string>
+    <string name="shuffle_photos">Shuffle Photos</string>
+    <string name="sync_now">Sync Cloud Photos</string>
+    <string name="scan_usb">Scan USB Drive</string>
+    <string name="clear_cache">Clear Cached Photos</string>
+    <string name="cached_offline">Offline Ready</string>
+    <string name="online_cloud">Cloud Synced</string>
+    <string name="usb_source">USB Drive</string>
+    <string name="demo_source">Ambient Gallery</string>
+    <string name="empty_library_title">No Photos Found</string>
+    <string name="empty_library_message">Insert a USB flash drive, sync a cloud album, or choose a curated ambient collection.</string>
+</resources>

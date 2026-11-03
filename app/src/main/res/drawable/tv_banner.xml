@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <!-- Deep TV Slate Background -->
+    <path
+        android:fillColor="#0D1117"
+        android:pathData="M0,0h320v180h-320z" />
+    
+    <!-- Ambient glowing subtle gradient shapes -->
+    <path
+        android:fillColor="#1F2937"
+        android:pathData="M0,0 L320,0 L320,120 L0,180 Z" />
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M0,175 L320,175 L320,180 L0,180 Z" />
+
+    <!-- Photo Frame Icon Outer -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M110,45 h100 c5.5,0 10,4.5 10,10 v70 c0,5.5 -4.5,10 -10,10 h-100 c-5.5,0 -10,-4.5 -10,-10 v-70 c0,-5.5 4.5,-10 10,-10 z" />
+
+    <!-- Inner Photo Canvas -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M116,51 h88 c3.3,0 6,2.7 6,6 v58 c0,3.3 -2.7,6 -6,6 h-88 c-3.3,0 -6,-2.7 -6,-6 v-58 c0,-3.3 2.7,-6 6,-6 z" />
+
+    <!-- Mountain Landscape inside frame -->
+    <path
+        android:fillColor="#60A5FA"
+        android:pathData="M124,112 L146,82 L162,102 L178,74 L204,112 Z" />
+
+    <!-- Ambient Sun/Moon -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M140,68 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+</vector>
