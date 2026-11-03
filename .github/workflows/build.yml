@@ -1,23 +1,14 @@
-name: Android CI Build
+name: Build APK
 
 on:
-  push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
-    name: Assemble Debug APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -25,21 +16,21 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
-      - name: Make Gradlew Executable
-        run: chmod +x ./gradlew
+      - name: Mock google-services.json if missing
+        run: |
+          if [ ! -f "app/google-services.json" ]; then
+            echo '{"project_info":{"project_number":"123456789012","project_id":"photo-viewer","storage_bucket":"photo-viewer.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:123456789012:android:abcdef","android_client_info":{"package_name":"com.example"}},"oauth_client":[],"api_key":[{"current_key":"fake_key"}],"services":{"analytics_service":{"status":1}}}],"configuration_version":"1"}' > app/google-services.json
+          fi
 
-      - name: Assemble Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace -Djava.awt.headless=true
-        env:
-          JAVA_OPTS: "-Djava.awt.headless=true -Xmx2048m"
-          GRADLE_OPTS: "-Djava.awt.headless=true -Dorg.gradle.jvmargs='-Xmx2048m -Djava.awt.headless=true'"
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
 
-      - name: Upload Debug APK
-        if: success()
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace -Dksp.run.in.process=true
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: photo-viewer-debug
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 7
