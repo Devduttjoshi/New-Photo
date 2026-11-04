@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.PhotoAlbum
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +51,7 @@ import com.example.model.PhotoItem
 import com.example.ui.theme.TvAccentCyan
 import com.example.ui.theme.TvFocusBorder
 import com.example.ui.theme.TvSurfaceDark
+import com.example.ui.theme.TvSurfaceElevated
 import com.example.ui.theme.TvTextPrimary
 import com.example.ui.theme.TvTextSecondary
 
@@ -56,6 +59,9 @@ import com.example.ui.theme.TvTextSecondary
 fun TvPhotoLibrarySheet(
     photos: List<PhotoItem>,
     currentIndex: Int,
+    availableWeeks: List<String> = emptyList(),
+    activeWeek: String = "ALL",
+    onSelectWeek: (String) -> Unit = {},
     onSelectPhoto: (Int) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
@@ -71,16 +77,17 @@ fun TvPhotoLibrarySheet(
 
     Surface(
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        color = TvSurfaceDark.copy(alpha = 0.95f),
+        color = TvSurfaceDark.copy(alpha = 0.98f),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
         modifier = modifier
             .fillMaxWidth()
-            .height(260.dp)
+            .height(310.dp)
     ) {
         Column(
             modifier = Modifier
                 .padding(top = 16.dp, bottom = 12.dp)
         ) {
+            // Header bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -97,8 +104,8 @@ fun TvPhotoLibrarySheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Photos Library (${photos.size} items)",
-                        fontSize = 18.sp,
+                        text = "Album Progression (${photos.size} Photos)",
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = TvTextPrimary
                     )
@@ -116,12 +123,39 @@ fun TvPhotoLibrarySheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            // Timeline Weeks Chips Row
+            if (availableWeeks.isNotEmpty()) {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                ) {
+                    item {
+                        WeekFilterChip(
+                            label = "All Weeks",
+                            isSelected = activeWeek == "ALL",
+                            onClick = { onSelectWeek("ALL") }
+                        )
+                    }
+                    items(availableWeeks) { week ->
+                        WeekFilterChip(
+                            label = week,
+                            isSelected = activeWeek == week,
+                            onClick = { onSelectWeek(week) }
+                        )
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
+            // Photo Thumbnails Row
             LazyRow(
                 state = listState,
                 contentPadding = PaddingValues(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 itemsIndexed(photos) { index, item ->
@@ -141,7 +175,7 @@ fun TvPhotoLibrarySheet(
                         ),
                         modifier = Modifier
                             .width(180.dp)
-                            .height(150.dp)
+                            .height(160.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .clickable { onSelectPhoto(index) }
                             .onFocusChanged { isFocused = it.isFocused }
@@ -159,12 +193,12 @@ fun TvPhotoLibrarySheet(
                                 modifier = Modifier.matchParentSize()
                             )
 
-                            // Title & badge overlay at bottom
+                            // Title & Week metadata badge at bottom
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .align(Alignment.BottomCenter)
-                                    .background(Color.Black.copy(alpha = 0.75f))
+                                    .background(Color.Black.copy(alpha = 0.82f))
                                     .padding(horizontal = 8.dp, vertical = 6.dp)
                             ) {
                                 Column {
@@ -175,17 +209,74 @@ fun TvPhotoLibrarySheet(
                                         color = TvTextPrimary,
                                         maxLines = 1
                                     )
-                                    Text(
-                                        text = item.source,
-                                        fontSize = 9.sp,
-                                        color = if (isSelected) TvAccentCyan else TvTextSecondary
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = if (item.weekLabel.isNotBlank()) item.weekLabel else item.source,
+                                            fontSize = 9.sp,
+                                            color = if (isSelected) TvAccentCyan else TvTextSecondary,
+                                            maxLines = 1
+                                        )
+                                        Text(
+                                            text = "#${item.albumProgressionIndex + 1}",
+                                            fontSize = 9.sp,
+                                            color = TvTextSecondary
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WeekFilterChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = when {
+            isSelected -> TvAccentCyan
+            isFocused -> TvSurfaceElevated
+            else -> Color.White.copy(alpha = 0.08f)
+        },
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isFocused && !isSelected) TvFocusBorder else Color.Transparent
+        ),
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.DateRange,
+                contentDescription = null,
+                tint = if (isSelected) Color.Black else TvAccentCyan,
+                modifier = Modifier.size(13.dp)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) Color.Black else TvTextPrimary
+            )
         }
     }
 }

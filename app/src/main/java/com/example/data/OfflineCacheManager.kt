@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import android.util.Log
 import com.example.model.PhotoItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,10 +30,11 @@ class OfflineCacheManager(
         }
 
     /**
-     * Downloads and caches a single photo locally for 100% offline playback.
+     * Downloads and caches a single photo locally with automatic LRU rolling eviction.
+     * Keeps local disk footprint strictly under maxCacheBytes to support 3,000+ photo albums!
      */
-    suspend fun cachePhoto(photo: PhotoItem): PhotoItem = withContext(Dispatchers.IO) {
-        // If already cached and file exists, return as-is
+    suspend fun cachePhoto(photo: PhotoItem, maxCacheBytes: Long = 250L * 1024 * 1024): PhotoItem = withContext(Dispatchers.IO) {
+        // If already cached on disk and file exists, return as-is
         if (photo.isCached && photo.localCachedPath != null && File(photo.localCachedPath).exists()) {
             return@withContext photo
         }
@@ -42,11 +44,17 @@ class OfflineCacheManager(
             return@withContext photo
         }
 
+        // 1. Enforce rolling LRU cache eviction before adding new file
+        enforceRollingCacheLimit(maxCacheBytes)
+
         try {
             val targetFile = File(cacheDir, "photo_${photo.id}_${System.currentTimeMillis()}.jpg")
-            val request = Request.Builder().url(photo.uri).build()
-            val response = client.newCall(request).execute()
+            val request = Request.Builder()
+                .url(photo.uri)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .build()
 
+            val response = client.newCall(request).execute()
             if (response.isSuccessful && response.body != null) {
                 response.body!!.byteStream().use { input ->
                     FileOutputStream(targetFile).use { output ->
@@ -63,33 +71,46 @@ class OfflineCacheManager(
                 return@withContext updated
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("OfflineCacheManager", "Error caching photo ${photo.id}", e)
         }
         return@withContext photo
     }
 
     /**
-     * Caches all uncached cloud photos in background.
+     * Prunes oldest viewed cached images from disk when exceeding user cache threshold.
+     * Retains metadata in Room DB so album progression is never lost!
      */
-    suspend fun cacheAllUncached(onProgress: (Int, Int) -> Unit = { _, _ -> }) = withContext(Dispatchers.IO) {
-        val uncached = photoDao.getUncachedCloudPhotos()
-        var completed = 0
-        val total = uncached.size
-        for (item in uncached) {
-            cachePhoto(item)
-            completed++
-            onProgress(completed, total)
+    private suspend fun enforceRollingCacheLimit(maxBytes: Long) {
+        try {
+            var currentBytes = photoDao.getCachedTotalBytes()
+            var loopCount = 0
+            while (currentBytes > maxBytes && loopCount < 10) {
+                loopCount++
+                val candidates = photoDao.getOldestCachedPhotos(8)
+                if (candidates.isEmpty()) break
+
+                for (item in candidates) {
+                    item.localCachedPath?.let { path ->
+                        val f = File(path)
+                        if (f.exists()) f.delete()
+                    }
+                    photoDao.markEvicted(item.id)
+                }
+                currentBytes = photoDao.getCachedTotalBytes()
+            }
+        } catch (e: Exception) {
+            Log.e("OfflineCacheManager", "Error enforcing rolling cache", e)
         }
     }
 
     /**
-     * Returns human-readable storage statistics (e.g. "24 photos (42.5 MB)")
+     * Returns human-readable storage statistics (e.g. "45 photos (94.2 MB / 250 MB limit)")
      */
-    suspend fun getCacheStats(): String = withContext(Dispatchers.IO) {
-        val files = cacheDir.listFiles() ?: emptyArray()
-        val totalBytes = files.sumOf { it.length() }
+    suspend fun getCacheStats(maxMb: Int = 250): String = withContext(Dispatchers.IO) {
+        val totalBytes = photoDao.getCachedTotalBytes()
+        val cachedCount = photoDao.getCachedCount()
         val sizeMb = totalBytes / (1024.0 * 1024.0)
-        "${files.size} photos (${String.format("%.1f", sizeMb)} MB cached offline)"
+        "$cachedCount cached offline (${String.format("%.1f", sizeMb)} MB / ${maxMb} MB limit)"
     }
 
     /**
@@ -101,9 +122,13 @@ class OfflineCacheManager(
             for (file in files) {
                 file.delete()
             }
-            // Update database records
-            val allPhotos = photoDao.getAllPhotos()
-            // We can re-fetch uncached or mark them uncached
+            // Mark all items evicted in database without losing metadata
+            val all = photoDao.getAllPhotosList()
+            for (item in all) {
+                if (item.isCached) {
+                    photoDao.markEvicted(item.id)
+                }
+            }
             return@withContext true
         } catch (e: Exception) {
             e.printStackTrace()

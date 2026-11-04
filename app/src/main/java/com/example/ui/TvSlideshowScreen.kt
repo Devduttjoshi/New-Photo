@@ -27,6 +27,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import com.example.ui.components.AmbientHudOverlay
 import com.example.ui.components.CrossfadeImageLayer
 import com.example.ui.components.TvPhotoLibrarySheet
+import com.example.ui.components.TvQrPairingDialog
 import com.example.ui.components.TvSettingsDrawer
 
 @Composable
@@ -44,9 +45,10 @@ fun TvSlideshowScreen(
     }
 
     // Back button handling
-    BackHandler(enabled = uiState.isSettingsOpen || uiState.isLibraryOpen) {
-        if (uiState.isSettingsOpen) viewModel.closeSettings()
-        if (uiState.isLibraryOpen) viewModel.closeLibrary()
+    BackHandler(enabled = uiState.isSettingsOpen || uiState.isLibraryOpen || uiState.isQrModalOpen) {
+        if (uiState.isQrModalOpen) viewModel.closeQrModal()
+        else if (uiState.isSettingsOpen) viewModel.closeSettings()
+        else if (uiState.isLibraryOpen) viewModel.closeLibrary()
     }
 
     Box(
@@ -62,7 +64,7 @@ fun TvSlideshowScreen(
                         KeyEvent.KEYCODE_DPAD_CENTER,
                         KeyEvent.KEYCODE_ENTER,
                         KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            if (!uiState.isSettingsOpen && !uiState.isLibraryOpen) {
+                            if (!uiState.isSettingsOpen && !uiState.isLibraryOpen && !uiState.isQrModalOpen) {
                                 viewModel.togglePlayPause()
                                 return@onKeyEvent true
                             }
@@ -70,7 +72,7 @@ fun TvSlideshowScreen(
                         KeyEvent.KEYCODE_DPAD_RIGHT,
                         KeyEvent.KEYCODE_MEDIA_NEXT,
                         KeyEvent.KEYCODE_PAGE_DOWN -> {
-                            if (!uiState.isSettingsOpen && !uiState.isLibraryOpen) {
+                            if (!uiState.isSettingsOpen && !uiState.isLibraryOpen && !uiState.isQrModalOpen) {
                                 viewModel.nextPhoto()
                                 return@onKeyEvent true
                             }
@@ -78,20 +80,20 @@ fun TvSlideshowScreen(
                         KeyEvent.KEYCODE_DPAD_LEFT,
                         KeyEvent.KEYCODE_MEDIA_PREVIOUS,
                         KeyEvent.KEYCODE_PAGE_UP -> {
-                            if (!uiState.isSettingsOpen && !uiState.isLibraryOpen) {
+                            if (!uiState.isSettingsOpen && !uiState.isLibraryOpen && !uiState.isQrModalOpen) {
                                 viewModel.previousPhoto()
                                 return@onKeyEvent true
                             }
                         }
                         KeyEvent.KEYCODE_DPAD_UP,
                         KeyEvent.KEYCODE_MENU -> {
-                            if (!uiState.isSettingsOpen) {
+                            if (!uiState.isSettingsOpen && !uiState.isQrModalOpen) {
                                 viewModel.openSettings()
                                 return@onKeyEvent true
                             }
                         }
                         KeyEvent.KEYCODE_DPAD_DOWN -> {
-                            if (!uiState.isLibraryOpen && !uiState.isSettingsOpen) {
+                            if (!uiState.isLibraryOpen && !uiState.isSettingsOpen && !uiState.isQrModalOpen) {
                                 viewModel.openLibrary()
                                 return@onKeyEvent true
                             }
@@ -103,7 +105,9 @@ fun TvSlideshowScreen(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = {
-                        if (uiState.isSettingsOpen) {
+                        if (uiState.isQrModalOpen) {
+                            viewModel.closeQrModal()
+                        } else if (uiState.isSettingsOpen) {
                             viewModel.closeSettings()
                         } else if (uiState.isLibraryOpen) {
                             viewModel.closeLibrary()
@@ -112,7 +116,9 @@ fun TvSlideshowScreen(
                         }
                     },
                     onDoubleTap = {
-                        viewModel.togglePlayPause()
+                        if (!uiState.isQrModalOpen) {
+                            viewModel.togglePlayPause()
+                        }
                     }
                 )
             }
@@ -124,7 +130,8 @@ fun TvSlideshowScreen(
             crossfadeSequence = uiState.crossfadeSequence,
             crossfadeDurationMs = settings.crossfadeDurationMs,
             kenBurnsEnabled = settings.kenBurnsEnabled,
-            slideIntervalSeconds = settings.slideIntervalSeconds
+            slideIntervalSeconds = settings.slideIntervalSeconds,
+            framingMode = settings.framingMode
         )
 
         // 2. Ambient HUD (Digital Clock, Date, Metadata, Progress Bar, Remote hints)
@@ -137,11 +144,14 @@ fun TvSlideshowScreen(
             showMetadata = settings.showMetadataBadge,
             totalPhotos = uiState.displayList.size,
             currentIndex = uiState.currentIndex,
+            activeWeek = uiState.activeWeek,
+            sessionResumedNotice = uiState.sessionResumedNotice,
             onPlayPauseToggle = { viewModel.togglePlayPause() },
             onNext = { viewModel.nextPhoto() },
             onPrevious = { viewModel.previousPhoto() },
             onOpenSettings = { viewModel.openSettings() },
-            onOpenLibrary = { viewModel.openLibrary() }
+            onOpenLibrary = { viewModel.openLibrary() },
+            onOpenQrModal = { viewModel.openQrModal() }
         )
 
         // 3. Thumbnails Library Drawer (Slides from bottom)
@@ -154,6 +164,9 @@ fun TvSlideshowScreen(
             TvPhotoLibrarySheet(
                 photos = uiState.displayList,
                 currentIndex = uiState.currentIndex,
+                availableWeeks = uiState.availableWeeks,
+                activeWeek = uiState.activeWeek,
+                onSelectWeek = { viewModel.selectWeek(it) },
                 onSelectPhoto = { viewModel.jumpToPhoto(it) },
                 onClose = { viewModel.closeLibrary() }
             )
@@ -174,8 +187,13 @@ fun TvSlideshowScreen(
                 totalPhotos = uiState.totalPhotosCount,
                 usbPhotosCount = uiState.usbPhotosCount,
                 cloudPhotosCount = uiState.cloudPhotosCount,
+                availableWeeks = uiState.availableWeeks,
+                activeWeek = uiState.activeWeek,
+                onSelectWeek = { viewModel.selectWeek(it) },
+                onIndexFullAlbum = { viewModel.indexFullAlbum() },
                 onClose = { viewModel.closeSettings() },
                 onUpdateAutoStart = { viewModel.settingsRepo.updateAutoStartOnBoot(it) },
+                onUpdateAutoResumeSession = { viewModel.settingsRepo.updateAutoResumeSession(it) },
                 onUpdateInterval = { viewModel.settingsRepo.updateSlideInterval(it) },
                 onUpdateCrossfade = { viewModel.settingsRepo.updateCrossfadeDuration(it) },
                 onUpdateKenBurns = { viewModel.settingsRepo.updateKenBurns(it) },
@@ -186,8 +204,21 @@ fun TvSlideshowScreen(
                 onScanUsb = { viewModel.scanUsbStorage() },
                 onSyncCloudPreset = { viewModel.syncCloudPreset(it) },
                 onSyncCustomUrl = { viewModel.syncCustomCloudUrl(it) },
-                onClearCache = { viewModel.clearOfflineCache() }
+                onClearCache = { viewModel.clearOfflineCache() },
+                onUpdateMaxCacheLimit = { viewModel.settingsRepo.updateMaxCacheSizeMb(it) },
+                onOpenQrModal = { viewModel.openQrModal() },
+                onUpdateFramingMode = { viewModel.settingsRepo.updateFramingMode(it) }
             )
         }
+
+        // 5. QR Code Phone Pairing Dialog
+        TvQrPairingDialog(
+            isOpen = uiState.isQrModalOpen,
+            serverUrl = uiState.localServerUrl,
+            localIpAddress = uiState.localIpAddress,
+            isPhoneConnected = uiState.isPhoneConnected,
+            syncStatusMessage = uiState.syncStatusMessage,
+            onClose = { viewModel.closeQrModal() }
+        )
     }
 }

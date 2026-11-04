@@ -11,7 +11,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [36])
 class ExampleRobolectricTest {
 
     @Test
@@ -31,10 +31,51 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `settings repository update crossfade duration`() {
+    fun `qr code generator creates valid bitmap for pairing url`() {
+        val testUrl = "http://192.168.1.100:8080"
+        val bitmap = com.example.util.QrCodeGenerator.generateQrBitmap(testUrl, 256)
+        org.junit.Assert.assertNotNull(bitmap)
+        org.junit.Assert.assertTrue(bitmap.width >= 200)
+        org.junit.Assert.assertTrue(bitmap.height >= 200)
+    }
+
+    @Test
+    fun `slideshow view model instantiates successfully without exception`() {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val vm = com.example.ui.SlideshowViewModel(app)
+        org.junit.Assert.assertNotNull(vm)
+        org.junit.Assert.assertNotNull(vm.uiState.value)
+    }
+
+    @Test
+    fun `settings framing mode defaults to AMBIENT_FIT and can be updated`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val settingsRepo = SettingsRepository(context)
-        settingsRepo.updateCrossfadeDuration(3000)
-        assertEquals(3000, settingsRepo.settings.value.crossfadeDurationMs)
+        assertEquals("AMBIENT_FIT", settingsRepo.settings.value.framingMode)
+        settingsRepo.updateFramingMode("FILL_CROP")
+        assertEquals("FILL_CROP", settingsRepo.settings.value.framingMode)
+    }
+
+    @Test
+    fun `embedded google photos test url is configured`() {
+        assertEquals("https://photos.app.goo.gl/4J68BKAjwN3pMTrY9", com.example.data.CloudSyncManager.USER_TEST_ALBUM_URL)
+    }
+
+    @Test
+    fun `settings session progression persistence updates state`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val settingsRepo = SettingsRepository(context)
+        assertTrue(settingsRepo.settings.value.autoResumeSession)
+        assertEquals(250, settingsRepo.settings.value.maxCacheSizeMb)
+
+        settingsRepo.saveSessionProgression(photoId = 42L, index = 7)
+        assertEquals(42L, settingsRepo.settings.value.lastSessionPhotoId)
+        assertEquals(7, settingsRepo.settings.value.lastSessionIndex)
+
+        settingsRepo.updateWeekFilter("Oct 2024 • Week 43")
+        assertEquals("Oct 2024 • Week 43", settingsRepo.settings.value.activeWeekFilter)
+
+        settingsRepo.updateMaxCacheSizeMb(500)
+        assertEquals(500, settingsRepo.settings.value.maxCacheSizeMb)
     }
 }
