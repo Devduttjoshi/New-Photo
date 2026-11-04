@@ -26,6 +26,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import com.example.ui.components.AmbientHudOverlay
 import com.example.ui.components.CrossfadeImageLayer
+import com.example.ui.components.TvBrowserScreen
 import com.example.ui.components.TvPhotoLibrarySheet
 import com.example.ui.components.TvQrPairingDialog
 import com.example.ui.components.TvSettingsDrawer
@@ -60,45 +61,56 @@ fun TvSlideshowScreen(
             .onKeyEvent { keyEvent ->
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
                     viewModel.showHudTemporarily()
+
+                    // If a drawer or dialog is open, let its focus system handle D-pad navigation
+                    if (uiState.isSettingsOpen || uiState.isLibraryOpen || uiState.isQrModalOpen) {
+                        return@onKeyEvent false
+                    }
+
+                    // Global media controls always respond
                     when (keyEvent.nativeKeyEvent.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            if (!uiState.isSettingsOpen && !uiState.isLibraryOpen && !uiState.isQrModalOpen) {
+                        KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_PAGE_DOWN -> {
+                            viewModel.nextPhoto()
+                            return@onKeyEvent true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_PREVIOUS, KeyEvent.KEYCODE_PAGE_UP -> {
+                            viewModel.previousPhoto()
+                            return@onKeyEvent true
+                        }
+                        KeyEvent.KEYCODE_MENU -> {
+                            viewModel.openSettings()
+                            return@onKeyEvent true
+                        }
+                    }
+
+                    // If HUD is hidden, first D-pad interaction wakes it up and performs quick action
+                    if (!uiState.isHudVisible) {
+                        when (keyEvent.nativeKeyEvent.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_CENTER,
+                            KeyEvent.KEYCODE_ENTER,
+                            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                                 viewModel.togglePlayPause()
                                 return@onKeyEvent true
                             }
-                        }
-                        KeyEvent.KEYCODE_DPAD_RIGHT,
-                        KeyEvent.KEYCODE_MEDIA_NEXT,
-                        KeyEvent.KEYCODE_PAGE_DOWN -> {
-                            if (!uiState.isSettingsOpen && !uiState.isLibraryOpen && !uiState.isQrModalOpen) {
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> {
                                 viewModel.nextPhoto()
                                 return@onKeyEvent true
                             }
-                        }
-                        KeyEvent.KEYCODE_DPAD_LEFT,
-                        KeyEvent.KEYCODE_MEDIA_PREVIOUS,
-                        KeyEvent.KEYCODE_PAGE_UP -> {
-                            if (!uiState.isSettingsOpen && !uiState.isLibraryOpen && !uiState.isQrModalOpen) {
+                            KeyEvent.KEYCODE_DPAD_LEFT -> {
                                 viewModel.previousPhoto()
                                 return@onKeyEvent true
                             }
-                        }
-                        KeyEvent.KEYCODE_DPAD_UP,
-                        KeyEvent.KEYCODE_MENU -> {
-                            if (!uiState.isSettingsOpen && !uiState.isQrModalOpen) {
+                            KeyEvent.KEYCODE_DPAD_UP -> {
                                 viewModel.openSettings()
                                 return@onKeyEvent true
                             }
-                        }
-                        KeyEvent.KEYCODE_DPAD_DOWN -> {
-                            if (!uiState.isLibraryOpen && !uiState.isSettingsOpen && !uiState.isQrModalOpen) {
+                            KeyEvent.KEYCODE_DPAD_DOWN -> {
                                 viewModel.openLibrary()
                                 return@onKeyEvent true
                             }
                         }
                     }
+                    // When HUD is visible, let D-pad navigation keys move between the HUD buttons!
                 }
                 false
             }
@@ -166,8 +178,16 @@ fun TvSlideshowScreen(
                 currentIndex = uiState.currentIndex,
                 availableWeeks = uiState.availableWeeks,
                 activeWeek = uiState.activeWeek,
+                activeSourceFilter = uiState.activeSourceFilter,
+                totalPhotosCount = uiState.totalPhotosCount,
+                usbPhotosCount = uiState.usbPhotosCount,
+                cloudPhotosCount = uiState.cloudPhotosCount,
+                phonePhotosCount = uiState.phonePhotosCount,
+                isRefreshing = uiState.isLibraryRefreshing,
+                onSelectSourceFilter = { viewModel.selectSourceFilter(it) },
                 onSelectWeek = { viewModel.selectWeek(it) },
                 onSelectPhoto = { viewModel.jumpToPhoto(it) },
+                onTriggerSubtleRefresh = { viewModel.refreshLibrarySubtly() },
                 onClose = { viewModel.closeLibrary() }
             )
         }
@@ -190,7 +210,6 @@ fun TvSlideshowScreen(
                 availableWeeks = uiState.availableWeeks,
                 activeWeek = uiState.activeWeek,
                 onSelectWeek = { viewModel.selectWeek(it) },
-                onIndexFullAlbum = { viewModel.indexFullAlbum() },
                 onClose = { viewModel.closeSettings() },
                 onUpdateAutoStart = { viewModel.settingsRepo.updateAutoStartOnBoot(it) },
                 onUpdateAutoResumeSession = { viewModel.settingsRepo.updateAutoResumeSession(it) },
@@ -207,7 +226,8 @@ fun TvSlideshowScreen(
                 onClearCache = { viewModel.clearOfflineCache() },
                 onUpdateMaxCacheLimit = { viewModel.settingsRepo.updateMaxCacheSizeMb(it) },
                 onOpenQrModal = { viewModel.openQrModal() },
-                onUpdateFramingMode = { viewModel.settingsRepo.updateFramingMode(it) }
+                onUpdateFramingMode = { viewModel.settingsRepo.updateFramingMode(it) },
+                onOpenBrowser = { viewModel.openBrowser(it) }
             )
         }
 
@@ -220,5 +240,13 @@ fun TvSlideshowScreen(
             syncStatusMessage = uiState.syncStatusMessage,
             onClose = { viewModel.closeQrModal() }
         )
+
+        // 6. In-App TV Web Browser (Debug / Beta)
+        if (uiState.isBrowserOpen) {
+            TvBrowserScreen(
+                initialUrl = uiState.browserUrl,
+                onClose = { viewModel.closeBrowser() }
+            )
+        }
     }
 }

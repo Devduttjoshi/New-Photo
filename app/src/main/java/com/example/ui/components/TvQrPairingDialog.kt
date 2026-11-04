@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -132,17 +133,30 @@ fun TvQrPairingDialog(
                         }
                     }
 
-                    IconButton(
-                        onClick = onClose,
+                    var isTopCloseFocused by remember { mutableStateOf(false) }
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isTopCloseFocused) TvSurfaceElevated else Color.White.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            width = if (isTopCloseFocused) 3.5.dp else 1.dp,
+                            color = if (isTopCloseFocused) TvAccentCyan else Color.White.copy(alpha = 0.2f)
+                        ),
                         modifier = Modifier
+                            .size(44.dp)
                             .clip(CircleShape)
+                            .clickable { onClose() }
+                            .onFocusChanged { isTopCloseFocused = it.isFocused }
+                            .focusable()
                             .testTag("close_qr_dialog_button")
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = TvTextPrimary
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = if (isTopCloseFocused) TvAccentCyan else TvTextPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
 
@@ -263,12 +277,13 @@ fun TvQrPairingDialog(
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(46.dp)
+                                .height(48.dp)
+                                .scale(if (isCloseButtonFocused) 1.04f else 1.0f)
                                 .onFocusChanged { isCloseButtonFocused = it.isFocused }
                                 .border(
-                                    1.dp,
-                                    if (isCloseButtonFocused) TvFocusBorder else Color.Transparent,
-                                    RoundedCornerShape(10.dp)
+                                    width = if (isCloseButtonFocused) 3.5.dp else 1.dp,
+                                    color = if (isCloseButtonFocused) TvAccentCyan else Color.White.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(10.dp)
                                 )
                                 .focusable()
                                 .testTag("dismiss_qr_modal_button")
@@ -276,7 +291,7 @@ fun TvQrPairingDialog(
                             Text(
                                 text = "Return to Slideshow",
                                 fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }

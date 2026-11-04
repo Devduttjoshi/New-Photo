@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,14 +21,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
@@ -35,12 +41,8 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Usb
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -55,19 +57,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.CloudSyncManager
 import com.example.data.SlideshowSettings
 import com.example.ui.theme.TvAccentAmber
 import com.example.ui.theme.TvAccentBlue
 import com.example.ui.theme.TvAccentCyan
 import com.example.ui.theme.TvAccentEmerald
-import com.example.ui.theme.TvFocusBorder
 import com.example.ui.theme.TvSurfaceDark
 import com.example.ui.theme.TvSurfaceElevated
 import com.example.ui.theme.TvTextPrimary
@@ -85,7 +90,6 @@ fun TvSettingsDrawer(
     availableWeeks: List<String>,
     activeWeek: String,
     onSelectWeek: (String) -> Unit,
-    onIndexFullAlbum: () -> Unit,
     onClose: () -> Unit,
     onUpdateAutoStart: (Boolean) -> Unit,
     onUpdateAutoResumeSession: (Boolean) -> Unit,
@@ -103,9 +107,12 @@ fun TvSettingsDrawer(
     onUpdateMaxCacheLimit: (Int) -> Unit,
     onOpenQrModal: () -> Unit,
     onUpdateFramingMode: (String) -> Unit,
+    onOpenBrowser: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var customCloudUrl by remember { mutableStateOf("") }
+    var isTextFieldFocused by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
 
     BoxWithConstraints(modifier = modifier.fillMaxHeight()) {
         val drawerWidth = if (maxWidth < 560.dp) maxWidth else 520.dp
@@ -117,7 +124,7 @@ fun TvSettingsDrawer(
                 .background(TvSurfaceDark.copy(alpha = 0.98f))
                 .border(
                     width = 1.dp,
-                    color = Color.White.copy(alpha = 0.1f),
+                    color = Color.White.copy(alpha = 0.12f),
                     shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
                 )
                 .padding(20.dp)
@@ -137,22 +144,37 @@ fun TvSettingsDrawer(
                             color = TvTextPrimary
                         )
                         Text(
-                            text = "Album Progression, Timeline & Storage",
+                            text = "D-Pad Navigation • Album Progression • Cloud Sync",
                             fontSize = 12.sp,
                             color = TvTextSecondary
                         )
                     }
-                    IconButton(
-                        onClick = onClose,
+
+                    var isCloseFocused by remember { mutableStateOf(false) }
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isCloseFocused) TvSurfaceElevated else Color.White.copy(alpha = 0.12f),
+                        border = BorderStroke(
+                            width = if (isCloseFocused) 3.dp else 1.dp,
+                            color = if (isCloseFocused) TvAccentCyan else Color.White.copy(alpha = 0.2f)
+                        ),
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(44.dp)
+                            .scale(if (isCloseFocused) 1.1f else 1.0f)
+                            .clip(CircleShape)
+                            .clickable { onClose() }
+                            .onFocusChanged { isCloseFocused = it.isFocused }
+                            .focusable()
                             .testTag("close_settings_button")
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close settings",
-                            tint = TvTextPrimary
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close settings",
+                                tint = if (isCloseFocused) TvAccentCyan else TvTextPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
 
@@ -164,7 +186,136 @@ fun TvSettingsDrawer(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(bottom = 28.dp)
                 ) {
-                    // SECTION 1: TIMELINE & WEEKLY GROUPING
+                    // SECTION 1: PHOTO SOURCES & LINK INPUT (Placed at top for easy TV access)
+                    item {
+                        SettingsSectionTitle("Paste / Add Google Photos Album")
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = TvSurfaceElevated,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = "Album Link or Image URL",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TvTextPrimary
+                                )
+                                Text(
+                                    text = "Paste any Google Photos album link or image URL. You can also use TV clipboard or phone QR pairing.",
+                                    fontSize = 11.sp,
+                                    color = TvTextSecondary
+                                )
+
+                                // Text input field with clear TV focus border
+                                OutlinedTextField(
+                                    value = customCloudUrl,
+                                    onValueChange = { customCloudUrl = it },
+                                    placeholder = { Text("https://photos.app.goo.gl/... or image URL", fontSize = 12.sp) },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                                    keyboardActions = KeyboardActions(
+                                        onGo = {
+                                            if (customCloudUrl.isNotBlank()) {
+                                                onSyncCustomUrl(customCloudUrl)
+                                            }
+                                        }
+                                    ),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = TvAccentCyan,
+                                        unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
+                                        focusedTextColor = TvTextPrimary,
+                                        unfocusedTextColor = TvTextPrimary
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .onFocusChanged { isTextFieldFocused = it.isFocused }
+                                        .border(
+                                            width = if (isTextFieldFocused) 3.dp else 0.dp,
+                                            color = if (isTextFieldFocused) TvAccentCyan else Color.Transparent,
+                                            shape = RoundedCornerShape(4.dp)
+                                        )
+                                )
+
+                                // Action Buttons Row: Paste from Clipboard & Load Album
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    TvActionButton(
+                                        text = "Paste Clipboard",
+                                        icon = Icons.Default.ContentPaste,
+                                        onClick = {
+                                            val clip = clipboardManager.getText()?.text?.trim()
+                                            if (!clip.isNullOrBlank()) {
+                                                customCloudUrl = clip
+                                                onSyncCustomUrl(clip)
+                                            }
+                                        },
+                                        containerColor = Color.White.copy(alpha = 0.15f),
+                                        contentColor = TvTextPrimary,
+                                        modifier = Modifier.weight(1f),
+                                        testTag = "paste_clipboard_button"
+                                    )
+
+                                    TvActionButton(
+                                        text = if (isSyncing) "Loading..." else "Load & Sync Album",
+                                        icon = Icons.Default.CloudSync,
+                                        onClick = {
+                                            if (customCloudUrl.isNotBlank()) {
+                                                onSyncCustomUrl(customCloudUrl)
+                                            }
+                                        },
+                                        containerColor = TvAccentCyan,
+                                        contentColor = Color.Black,
+                                        enabled = !isSyncing && customCloudUrl.isNotBlank(),
+                                        modifier = Modifier.weight(1.3f),
+                                        testTag = "load_album_button"
+                                    )
+                                }
+
+                                if (isSyncing || syncStatusMessage.isNotBlank()) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    ) {
+                                        if (isSyncing) {
+                                            CircularProgressIndicator(
+                                                color = TvAccentCyan,
+                                                strokeWidth = 2.dp,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                        Text(
+                                            text = syncStatusMessage,
+                                            fontSize = 12.sp,
+                                            color = if (syncStatusMessage.startsWith("No photos")) Color(0xFFEF4444) else TvAccentEmerald,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                // QR Pairing Button (No typing needed)
+                                TvActionButton(
+                                    text = "Pair Phone via QR Code",
+                                    icon = Icons.Default.QrCode2,
+                                    onClick = onOpenQrModal,
+                                    containerColor = TvAccentCyan.copy(alpha = 0.2f),
+                                    contentColor = TvAccentCyan,
+                                    focusedBorderColor = TvAccentCyan,
+                                    testTag = "open_qr_pairing_from_settings"
+                                )
+                            }
+                        }
+                    }
+
+                    // SECTION 2: TIMELINE & WEEKLY GROUPING
                     item {
                         SettingsSectionTitle("Timeline & Weekly Grouping")
                         Surface(
@@ -222,7 +373,7 @@ fun TvSettingsDrawer(
                         }
                     }
 
-                    // SECTION 2: SESSION RESUME & BOOT
+                    // SECTION 3: SESSION PERSISTENCE & TV STARTUP
                     item {
                         SettingsSectionTitle("Session Persistence & Startup")
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -240,82 +391,6 @@ fun TvSettingsDrawer(
                                 checked = settings.autoStartOnBoot,
                                 onCheckedChange = onUpdateAutoStart
                             )
-                        }
-                    }
-
-                    // SECTION 3: FULL METADATA INDEXING & DYNAMIC SYNC
-                    item {
-                        SettingsSectionTitle("Dynamic Album Progression (${totalPhotos} Registered)")
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = TvSurfaceElevated,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Text(
-                                    text = "Lightweight Metadata Directory",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = TvTextPrimary
-                                )
-                                Text(
-                                    text = "By default, photos register metadata progressively as they display. For large albums (3,000+ photos), you can index all photo positions and weeks immediately without downloading raw images.",
-                                    fontSize = 12.sp,
-                                    color = TvTextSecondary
-                                )
-
-                                Button(
-                                    onClick = onIndexFullAlbum,
-                                    colors = ButtonDefaults.buttonColors(containerColor = TvAccentCyan),
-                                    enabled = !isSyncing,
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(46.dp)
-                                        .testTag("index_full_album_button")
-                                ) {
-                                    if (isSyncing) {
-                                        CircularProgressIndicator(
-                                            color = Color.Black,
-                                            strokeWidth = 2.dp,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = syncStatusMessage.ifBlank { "Indexing Album..." },
-                                            color = Color.Black,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    } else {
-                                        Icon(
-                                            Icons.Default.CloudSync,
-                                            contentDescription = null,
-                                            tint = Color.Black,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Index All 3,000+ Album Photos Now",
-                                            color = Color.Black,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-
-                                if (isSyncing && syncStatusMessage.isNotBlank()) {
-                                    Text(
-                                        text = syncStatusMessage,
-                                        fontSize = 11.sp,
-                                        color = TvAccentAmber,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
                         }
                     }
 
@@ -341,7 +416,7 @@ fun TvSettingsDrawer(
                                             color = TvTextPrimary
                                         )
                                         Text(
-                                            text = "Prevents 3,000+ photo albums from exhausting TV disk storage",
+                                            text = "Prevents large albums from exhausting TV disk storage",
                                             fontSize = 11.sp,
                                             color = TvTextSecondary
                                         )
@@ -390,24 +465,38 @@ fun TvSettingsDrawer(
                                         modifier = Modifier.weight(1f)
                                     )
 
-                                    OutlinedButton(
-                                        onClick = onClearCache,
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
+                                    var isClearFocused by remember { mutableStateOf(false) }
+                                    Surface(
                                         shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.height(36.dp)
+                                        color = if (isClearFocused) Color(0xFFEF4444).copy(alpha = 0.25f) else Color.Transparent,
+                                        border = BorderStroke(
+                                            width = if (isClearFocused) 3.dp else 1.dp,
+                                            color = if (isClearFocused) Color(0xFFEF4444) else Color(0xFFEF4444).copy(alpha = 0.6f)
+                                        ),
+                                        modifier = Modifier
+                                            .scale(if (isClearFocused) 1.05f else 1.0f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { onClearCache() }
+                                            .onFocusChanged { isClearFocused = it.isFocused }
+                                            .focusable()
                                     ) {
-                                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Clear Cache", fontSize = 11.sp)
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Clear Cache", fontSize = 11.sp, color = Color(0xFFEF4444), fontWeight = FontWeight.SemiBold)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    // SECTION 5: PHOTO SOURCES & PHONE PAIRING
+                    // SECTION 6: SOURCE FILTER & USB SCAN
                     item {
-                        SettingsSectionTitle("Photo Sources")
+                        SettingsSectionTitle("Filter Sources & Local USB")
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             // Filter pills
                             Row(
@@ -415,7 +504,7 @@ fun TvSettingsDrawer(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 listOf(
-                                    Pair("ALL", "All Photos ($totalPhotos)"),
+                                    Pair("ALL", "All ($totalPhotos)"),
                                     Pair("USB", "USB ($usbPhotosCount)"),
                                     Pair("CLOUD", "Cloud ($cloudPhotosCount)")
                                 ).forEach { (filterKey, label) ->
@@ -429,71 +518,19 @@ fun TvSettingsDrawer(
                                 }
                             }
 
-                            // QR Phone Pairing button
-                            Button(
-                                onClick = onOpenQrModal,
-                                colors = ButtonDefaults.buttonColors(containerColor = TvAccentCyan),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .testTag("open_qr_pairing_from_settings")
-                            ) {
-                                Icon(Icons.Default.QrCode2, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = "Pair Phone via QR (Send Links & Photos)",
-                                    color = Color.Black,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                            }
-
                             // USB Scan button
-                            Button(
+                            TvActionButton(
+                                text = "Scan USB Drive & Local Storage",
+                                icon = Icons.Default.Usb,
                                 onClick = onScanUsb,
-                                colors = ButtonDefaults.buttonColors(containerColor = TvAccentBlue),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(44.dp)
-                                    .testTag("scan_usb_button")
-                            ) {
-                                Icon(Icons.Default.Usb, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Scan USB Drive & Local Media", fontSize = 12.sp)
-                            }
-
-                            // Custom link field
-                            OutlinedTextField(
-                                value = customCloudUrl,
-                                onValueChange = { customCloudUrl = it },
-                                placeholder = { Text("Enter Google Photos album / image link", fontSize = 12.sp) },
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = TvAccentCyan,
-                                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                                    focusedTextColor = TvTextPrimary,
-                                    unfocusedTextColor = TvTextPrimary
-                                ),
-                                trailingIcon = {
-                                    IconButton(
-                                        onClick = {
-                                            if (customCloudUrl.isNotBlank()) {
-                                                onSyncCustomUrl(customCloudUrl)
-                                                customCloudUrl = ""
-                                            }
-                                        }
-                                    ) {
-                                        Icon(Icons.Default.CloudSync, contentDescription = "Sync", tint = TvAccentCyan)
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth()
+                                containerColor = TvAccentBlue,
+                                contentColor = Color.White,
+                                testTag = "scan_usb_button"
                             )
                         }
                     }
 
-                    // SECTION 6: TRANSITIONS & MOTION
+                    // SECTION 7: TRANSITIONS & MOTION
                     item {
                         SettingsSectionTitle("Transitions & Motion")
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -582,7 +619,7 @@ fun TvSettingsDrawer(
                         }
                     }
 
-                    // SECTION 7: DISPLAY OVERLAYS
+                    // SECTION 8: DISPLAY OVERLAYS
                     item {
                         SettingsSectionTitle("Display Overlays")
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -602,8 +639,114 @@ fun TvSettingsDrawer(
                             )
                         }
                     }
+
+                    // SECTION 9: DEBUG / BETA
+                    item {
+                        SettingsSectionTitle("Debug / Beta")
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = TvSurfaceElevated,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Language,
+                                        contentDescription = null,
+                                        tint = TvAccentCyan,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "Web Browser (Beta)",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TvTextPrimary
+                                    )
+                                }
+                                Text(
+                                    text = "Open the built-in TV browser to test web pages, explore online galleries, or inspect photo album links.",
+                                    fontSize = 11.sp,
+                                    color = TvTextSecondary
+                                )
+
+                                TvActionButton(
+                                    text = "Launch Web Browser",
+                                    icon = Icons.Default.Language,
+                                    onClick = { onOpenBrowser("https://photos.google.com") },
+                                    containerColor = TvAccentCyan.copy(alpha = 0.2f),
+                                    contentColor = TvAccentCyan,
+                                    focusedBorderColor = TvAccentCyan,
+                                    testTag = "open_web_browser_btn"
+                                )
+                            }
+                        }
+                    }
                 }
             }
+        }
+    }
+}
+
+/**
+ * TV Focus-Aware Full Action Button with high-contrast 3.5dp border and elevation on D-pad focus.
+ */
+@Composable
+fun TvActionButton(
+    text: String,
+    icon: ImageVector?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    containerColor: Color = TvAccentCyan,
+    contentColor: Color = Color.Black,
+    focusedBorderColor: Color = TvAccentCyan,
+    enabled: Boolean = true,
+    testTag: String = ""
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = if (isFocused) TvSurfaceElevated else containerColor.copy(alpha = if (enabled) 1f else 0.5f),
+        border = BorderStroke(
+            width = if (isFocused) 3.5.dp else 1.dp,
+            color = if (isFocused) focusedBorderColor else Color.Transparent
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .scale(if (isFocused) 1.04f else 1.0f)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = enabled) { onClick() }
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable(enabled = enabled)
+            .testTag(testTag)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isFocused) focusedBorderColor else contentColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(
+                text = text,
+                color = if (isFocused) Color.White else contentColor,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
+            )
         }
     }
 }
@@ -632,34 +775,35 @@ private fun TvToggleCard(
 
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = if (isFocused) TvSurfaceElevated.copy(alpha = 0.9f) else TvSurfaceElevated.copy(alpha = 0.5f),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (isFocused) TvFocusBorder else Color.Transparent
+        color = if (isFocused) TvSurfaceElevated else TvSurfaceElevated.copy(alpha = 0.5f),
+        border = BorderStroke(
+            width = if (isFocused) 3.5.dp else 1.dp,
+            color = if (isFocused) TvAccentCyan else Color.White.copy(alpha = 0.1f)
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .scale(if (isFocused) 1.02f else 1.0f)
             .clip(RoundedCornerShape(12.dp))
             .clickable { onCheckedChange(!checked) }
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (checked) TvAccentCyan else TvTextSecondary,
-                modifier = Modifier.size(22.dp)
+                tint = if (isFocused || checked) TvAccentCyan else TvTextSecondary,
+                modifier = Modifier.size(24.dp)
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = TvTextPrimary
                 )
                 Text(
@@ -692,15 +836,20 @@ private fun TvOptionPill(
     Surface(
         shape = RoundedCornerShape(8.dp),
         color = when {
-            isSelected -> TvAccentCyan
             isFocused -> TvSurfaceElevated
+            isSelected -> TvAccentCyan
             else -> Color.White.copy(alpha = 0.08f)
         },
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (isFocused && !isSelected) TvFocusBorder else Color.Transparent
+        border = BorderStroke(
+            width = if (isFocused) 3.5.dp else 1.dp,
+            color = when {
+                isFocused -> TvAccentCyan
+                isSelected -> TvAccentCyan.copy(alpha = 0.8f)
+                else -> Color.White.copy(alpha = 0.12f)
+            }
         ),
         modifier = modifier
+            .scale(if (isFocused) 1.06f else 1.0f)
             .clip(RoundedCornerShape(8.dp))
             .clickable { onClick() }
             .onFocusChanged { isFocused = it.isFocused }
@@ -713,8 +862,12 @@ private fun TvOptionPill(
             Text(
                 text = label,
                 fontSize = 12.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = if (isSelected) Color.Black else TvTextPrimary
+                fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Medium,
+                color = when {
+                    isFocused -> TvAccentCyan
+                    isSelected -> Color.Black
+                    else -> TvTextPrimary
+                }
             )
         }
     }

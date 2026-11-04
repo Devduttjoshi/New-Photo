@@ -39,13 +39,18 @@ data class SlideshowUiState(
     val totalPhotosCount: Int = 0,
     val usbPhotosCount: Int = 0,
     val cloudPhotosCount: Int = 0,
+    val phonePhotosCount: Int = 0,
     val crossfadeSequence: Long = 0L,
     val localServerUrl: String = "",
     val localIpAddress: String = "",
     val isPhoneConnected: Boolean = false,
     val availableWeeks: List<String> = emptyList(),
     val activeWeek: String = "ALL",
-    val sessionResumedNotice: String = ""
+    val activeSourceFilter: String = "ALL",
+    val sessionResumedNotice: String = "",
+    val isLibraryRefreshing: Boolean = false,
+    val isBrowserOpen: Boolean = false,
+    val browserUrl: String = "https://photos.google.com"
 )
 
 class SlideshowViewModel(application: Application) : AndroidViewModel(application) {
@@ -86,6 +91,7 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
                 var filtered = when (currentSettings.activeSourceFilter) {
                     "USB" -> photos.filter { it.source == PhotoSource.USB.name }
                     "CLOUD" -> photos.filter { it.source == PhotoSource.CLOUD.name }
+                    "PHONE" -> photos.filter { it.source == PhotoSource.LOCAL.name }
                     else -> photos
                 }
 
@@ -103,6 +109,7 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
 
                 val usbCount = photos.count { it.source == PhotoSource.USB.name }
                 val cloudCount = photos.count { it.source == PhotoSource.CLOUD.name }
+                val phoneCount = photos.count { it.source == PhotoSource.LOCAL.name }
 
                 // Resume session progression on first load
                 var initialIndex = _uiState.value.currentIndex.coerceIn(0, (finalDisplay.size - 1).coerceAtLeast(0))
@@ -131,13 +138,15 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
                     totalPhotosCount = photos.size,
                     usbPhotosCount = usbCount,
                     cloudPhotosCount = cloudCount,
+                    phonePhotosCount = phoneCount,
                     activeWeek = currentSettings.activeWeekFilter,
+                    activeSourceFilter = currentSettings.activeSourceFilter,
                     sessionResumedNotice = resumeNotice
                 )
 
-                // If DB is empty, dynamically crawl the album progression
+                // If DB is empty, seed 5 generic high-quality test photos to immediately display
                 if (photos.isEmpty()) {
-                    startDynamicAlbumSync()
+                    seedGenericTestPhotos()
                 } else if (currentPhoto != null) {
                     prepareCurrentPhotoForOffline(currentPhoto)
                 }
@@ -147,16 +156,119 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
         refreshCacheStats()
         startSlideshowTimer()
         scheduleHudAutoHide()
+
+        // Automatically scan USB drives and verify saved Google Photos link on startup/restart
+        viewModelScope.launch {
+            refreshLibraryOnStartup()
+        }
+    }
+
+    private fun seedGenericTestPhotos() {
+        viewModelScope.launch {
+            val count = photoDao.getCount()
+            if (count > 0) return@launch
+
+            val genericTestPhotos = listOf(
+                PhotoItem(
+                    uri = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1920&q=80",
+                    title = "Alpine Mountain Reflections",
+                    albumName = "Scenic Landscapes",
+                    source = PhotoSource.CLOUD.name,
+                    albumProgressionIndex = 0,
+                    weekLabel = "Autumn • Week 41",
+                    dateAdded = System.currentTimeMillis() - 400000000L,
+                    dateTakenMillis = System.currentTimeMillis() - 400000000L,
+                    isCached = false
+                ),
+                PhotoItem(
+                    uri = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920&q=80",
+                    title = "Morning Fog Over Pine Valley",
+                    albumName = "Scenic Landscapes",
+                    source = PhotoSource.CLOUD.name,
+                    albumProgressionIndex = 1,
+                    weekLabel = "Autumn • Week 41",
+                    dateAdded = System.currentTimeMillis() - 350000000L,
+                    dateTakenMillis = System.currentTimeMillis() - 350000000L,
+                    isCached = false
+                ),
+                PhotoItem(
+                    uri = "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=1920&q=80",
+                    title = "Autumn Forest Canopy Trail",
+                    albumName = "Scenic Landscapes",
+                    source = PhotoSource.CLOUD.name,
+                    albumProgressionIndex = 2,
+                    weekLabel = "Autumn • Week 42",
+                    dateAdded = System.currentTimeMillis() - 300000000L,
+                    dateTakenMillis = System.currentTimeMillis() - 300000000L,
+                    isCached = false
+                ),
+                PhotoItem(
+                    uri = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920&q=80",
+                    title = "Pacific Coastal Horizon Sunset",
+                    albumName = "Scenic Landscapes",
+                    source = PhotoSource.CLOUD.name,
+                    albumProgressionIndex = 3,
+                    weekLabel = "Autumn • Week 42",
+                    dateAdded = System.currentTimeMillis() - 250000000L,
+                    dateTakenMillis = System.currentTimeMillis() - 250000000L,
+                    isCached = false
+                ),
+                PhotoItem(
+                    uri = "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80",
+                    title = "Starry Night Over Snow Peaks",
+                    albumName = "Scenic Landscapes",
+                    source = PhotoSource.CLOUD.name,
+                    albumProgressionIndex = 4,
+                    weekLabel = "Autumn • Week 43",
+                    dateAdded = System.currentTimeMillis() - 200000000L,
+                    dateTakenMillis = System.currentTimeMillis() - 200000000L,
+                    isCached = false
+                )
+            )
+
+            photoDao.insertAll(genericTestPhotos)
+            _uiState.value = _uiState.value.copy(
+                syncStatusMessage = "Ready with 5 test photos"
+            )
+        }
+    }
+
+    private suspend fun refreshLibraryOnStartup() {
+        _uiState.value = _uiState.value.copy(isLibraryRefreshing = true)
+        try {
+            // 1. Silent scan for attached USB media and external storage
+            val usbPhotos = usbScanner.scanUsbAndExternalStorage()
+            if (usbPhotos.isNotEmpty()) {
+                photoDao.insertAll(usbPhotos)
+            }
+
+            // 2. Silent background crawl/refresh of saved Google Photos link if configured
+            val savedUrl = settings.value.savedGooglePhotosUrl.trim()
+            if (savedUrl.isNotBlank()) {
+                cloudSyncManager.indexAlbumMetadata(
+                    albumUrl = savedUrl,
+                    limit = 2000
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SlideshowViewModel", "Error refreshing library on startup", e)
+        } finally {
+            _uiState.value = _uiState.value.copy(isLibraryRefreshing = false)
+            refreshCacheStats()
+        }
     }
 
     private fun startDynamicAlbumSync() {
+        val savedUrl = settings.value.savedGooglePhotosUrl.trim()
+        if (savedUrl.isBlank()) return
+
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isSyncing = true,
                 syncStatusMessage = "Connecting to Google Photos album..."
             )
             val indexed = cloudSyncManager.indexAlbumMetadata(
-                albumUrl = CloudSyncManager.DEFAULT_GOOGLE_PHOTOS_URL,
+                albumUrl = savedUrl,
                 onProgress = { count ->
                     _uiState.value = _uiState.value.copy(
                         syncStatusMessage = "Registered $count photos in album progression..."
@@ -215,12 +327,14 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun onAlbumLinkReceivedFromPhone(url: String) {
+        val clean = CloudSyncManager.sanitizeUrl(url)
+        settingsRepo.updateSavedGooglePhotosUrl(clean)
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isSyncing = true,
                 syncStatusMessage = "Syncing album progression from phone..."
             )
-            val imported = cloudSyncManager.indexAlbumMetadata(albumUrl = url, limit = 1500)
+            val imported = cloudSyncManager.indexAlbumMetadata(albumUrl = clean, limit = 2000)
             _uiState.value = _uiState.value.copy(
                 isSyncing = false,
                 syncStatusMessage = if (imported.isNotEmpty()) "Imported ${imported.size} photos!" else "Connected to album"
@@ -230,6 +344,9 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
             delay(1500)
             _uiState.value = _uiState.value.copy(isQrModalOpen = false)
             if (imported.isNotEmpty()) {
+                settingsRepo.updateSourceFilter("ALL")
+                settingsRepo.updateWeekFilter("ALL")
+                delay(300)
                 jumpToPhoto(0)
             }
         }
@@ -390,11 +507,10 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
                 isSyncing = true,
                 syncStatusMessage = "Syncing preset '$preset'..."
             )
-            val albumUrl = when (preset) {
-                "GOOGLE_PHOTOS_TEST" -> CloudSyncManager.USER_TEST_ALBUM_URL
-                else -> CloudSyncManager.DEFAULT_GOOGLE_PHOTOS_URL
+            val albumUrl = settings.value.savedGooglePhotosUrl.ifBlank { "" }
+            if (albumUrl.isNotBlank()) {
+                cloudSyncManager.indexAlbumMetadata(albumUrl)
             }
-            cloudSyncManager.indexAlbumMetadata(albumUrl)
             _uiState.value = _uiState.value.copy(
                 isSyncing = false,
                 syncStatusMessage = "Preset synced"
@@ -404,22 +520,74 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun syncCustomCloudUrl(url: String) {
-        if (url.isBlank()) return
+        val clean = CloudSyncManager.sanitizeUrl(url)
+        if (clean.isBlank()) return
+        settingsRepo.updateSavedGooglePhotosUrl(clean)
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isSyncing = true,
                 syncStatusMessage = "Fetching album metadata..."
             )
-            val results = cloudSyncManager.indexAlbumMetadata(url)
+            val results = cloudSyncManager.indexAlbumMetadata(clean, limit = 2000)
+            val message = if (results.isNotEmpty()) {
+                "Imported ${results.size} photos into album!"
+            } else {
+                "No photos found. Check link or album sharing permission."
+            }
             _uiState.value = _uiState.value.copy(
                 isSyncing = false,
-                syncStatusMessage = "Found ${results.size} photos in album"
+                syncStatusMessage = message
             )
             refreshCacheStats()
             if (results.isNotEmpty()) {
+                settingsRepo.updateSourceFilter("ALL")
+                settingsRepo.updateWeekFilter("ALL")
+                delay(300)
                 jumpToPhoto(0)
             }
         }
+    }
+
+    fun selectSourceFilter(filter: String) {
+        settingsRepo.updateSourceFilter(filter)
+    }
+
+    fun refreshLibrarySubtly() {
+        if (_uiState.value.isLibraryRefreshing) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLibraryRefreshing = true)
+            try {
+                // Subtle scan of USB storage
+                val usbPhotos = usbScanner.scanUsbAndExternalStorage()
+                if (usbPhotos.isNotEmpty()) {
+                    photoDao.insertAll(usbPhotos)
+                }
+                // Subtle scan of saved Google Photos link
+                val savedUrl = settings.value.savedGooglePhotosUrl.trim()
+                if (savedUrl.isNotBlank()) {
+                    cloudSyncManager.indexAlbumMetadata(albumUrl = savedUrl, limit = 2000)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("SlideshowViewModel", "Error refreshing library subtly", e)
+            } finally {
+                _uiState.value = _uiState.value.copy(isLibraryRefreshing = false)
+                refreshCacheStats()
+            }
+        }
+    }
+
+    fun openBrowser(url: String = "https://photos.google.com") {
+        _uiState.value = _uiState.value.copy(
+            isBrowserOpen = true,
+            browserUrl = url,
+            isSettingsOpen = false,
+            isHudVisible = false
+        )
+    }
+
+    fun closeBrowser() {
+        _uiState.value = _uiState.value.copy(isBrowserOpen = false)
+        showHudTemporarily()
     }
 
     fun togglePlayPause() {
@@ -478,6 +646,7 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun openLibrary() {
         _uiState.value = _uiState.value.copy(isLibraryOpen = true, isHudVisible = true)
+        refreshLibrarySubtly()
     }
 
     fun closeLibrary() {

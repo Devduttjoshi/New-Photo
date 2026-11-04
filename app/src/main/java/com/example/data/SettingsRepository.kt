@@ -18,11 +18,12 @@ data class SlideshowSettings(
     val cacheCloudPhotosOffline: Boolean = true,
     val activeSourceFilter: String = "ALL", // "ALL", "USB", "CLOUD"
     val activeWeekFilter: String = "ALL", // "ALL" or specific week label like "Oct 2024 • Week 43"
-    val cloudAlbumPreset: String = "GOOGLE_PHOTOS_TEST",
+    val cloudAlbumPreset: String = "GOOGLE_PHOTOS",
     val framingMode: String = "AMBIENT_FIT", // "AMBIENT_FIT", "FILL_CROP", "BLACK_BARS"
     val maxCacheSizeMb: Int = 250, // Rolling cache cap to protect TV disk storage
     val lastSessionPhotoId: Long = 0L,
-    val lastSessionIndex: Int = 0
+    val lastSessionIndex: Int = 0,
+    val savedGooglePhotosUrl: String = ""
 )
 
 class SettingsRepository(context: Context) {
@@ -45,12 +46,19 @@ class SettingsRepository(context: Context) {
             cacheCloudPhotosOffline = prefs.getBoolean(KEY_CACHE_OFFLINE, true),
             activeSourceFilter = prefs.getString(KEY_SOURCE_FILTER, "ALL") ?: "ALL",
             activeWeekFilter = prefs.getString(KEY_WEEK_FILTER, "ALL") ?: "ALL",
-            cloudAlbumPreset = prefs.getString(KEY_CLOUD_PRESET, "GOOGLE_PHOTOS_TEST") ?: "GOOGLE_PHOTOS_TEST",
+            cloudAlbumPreset = prefs.getString(KEY_CLOUD_PRESET, "GOOGLE_PHOTOS") ?: "GOOGLE_PHOTOS",
             framingMode = prefs.getString(KEY_FRAMING_MODE, "AMBIENT_FIT") ?: "AMBIENT_FIT",
             maxCacheSizeMb = prefs.getInt(KEY_MAX_CACHE_MB, 250),
             lastSessionPhotoId = prefs.getLong(KEY_LAST_PHOTO_ID, 0L),
-            lastSessionIndex = prefs.getInt(KEY_LAST_INDEX, 0)
+            lastSessionIndex = prefs.getInt(KEY_LAST_INDEX, 0),
+            savedGooglePhotosUrl = prefs.getString(KEY_SAVED_GOOGLE_PHOTOS_URL, "") ?: ""
         )
+    }
+
+    fun updateSavedGooglePhotosUrl(url: String) {
+        val clean = CloudSyncManager.sanitizeUrl(url)
+        prefs.edit().putString(KEY_SAVED_GOOGLE_PHOTOS_URL, clean).apply()
+        _settings.value = _settings.value.copy(savedGooglePhotosUrl = clean)
     }
 
     fun updateAutoStartOnBoot(enabled: Boolean) {
@@ -151,6 +159,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_MAX_CACHE_MB = "max_cache_mb"
         private const val KEY_LAST_PHOTO_ID = "last_photo_id"
         private const val KEY_LAST_INDEX = "last_index"
+        private const val KEY_SAVED_GOOGLE_PHOTOS_URL = "saved_google_photos_url"
 
         @Volatile
         private var INSTANCE: SettingsRepository? = null

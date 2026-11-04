@@ -3,8 +3,10 @@ package com.example.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -33,7 +35,6 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,10 +47,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.PhotoItem
@@ -57,6 +62,7 @@ import com.example.model.PhotoSource
 import com.example.ui.theme.TvAccentAmber
 import com.example.ui.theme.TvAccentCyan
 import com.example.ui.theme.TvAccentEmerald
+import com.example.ui.theme.TvSurfaceElevated
 import com.example.ui.theme.TvTextMuted
 import com.example.ui.theme.TvTextPrimary
 import com.example.ui.theme.TvTextSecondary
@@ -111,7 +117,7 @@ fun AmbientHudOverlay(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.78f),
+                            Color.Black.copy(alpha = 0.82f),
                             Color.Transparent,
                             Color.Transparent,
                             Color.Black.copy(alpha = 0.88f)
@@ -125,7 +131,7 @@ fun AmbientHudOverlay(
 
             // TOP BAR: Clock, Status Badges, QR pairing, and Settings
             if (isPortrait) {
-                // Portrait Layout: Stacked into clean responsive rows to avoid bleeding/overlap
+                // Portrait Layout
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -157,57 +163,23 @@ fun AmbientHudOverlay(
                         // Right Action Buttons
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // QR Pairing Button (Compact in portrait)
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = TvAccentCyan.copy(alpha = 0.2f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, TvAccentCyan.copy(alpha = 0.5f)),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .clickable { onOpenQrModal() }
-                                    .testTag("pair_phone_qr_button")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.QrCode2,
-                                        contentDescription = "Pair Phone",
-                                        tint = TvAccentCyan,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Phone (QR)",
-                                        fontSize = 11.sp,
-                                        color = TvAccentCyan,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
+                            TvPillButton(
+                                icon = Icons.Default.QrCode2,
+                                label = "Phone (QR)",
+                                onClick = onOpenQrModal,
+                                testTag = "pair_phone_qr_button"
+                            )
 
-                            // Settings Button
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.White.copy(alpha = 0.15f),
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .clickable { onOpenSettings() }
-                                    .testTag("settings_button")
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = "Settings",
-                                        tint = TvTextPrimary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            TvIconButton(
+                                icon = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                onClick = onOpenSettings,
+                                size = 44.dp,
+                                iconSize = 22.dp,
+                                testTag = "settings_button"
+                            )
                         }
                     }
 
@@ -263,7 +235,7 @@ fun AmbientHudOverlay(
                     // Right Badges & Actions
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         if (photo != null && showMetadata) {
                             SourceBadge(source = photo.source)
@@ -277,55 +249,21 @@ fun AmbientHudOverlay(
                             }
                         }
 
-                        // QR Phone Pairing Button
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = TvAccentCyan.copy(alpha = 0.2f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, TvAccentCyan.copy(alpha = 0.6f)),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .clickable { onOpenQrModal() }
-                                .testTag("pair_phone_qr_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.QrCode2,
-                                    contentDescription = "Connect Phone via QR",
-                                    tint = TvAccentCyan,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Connect Phone (QR)",
-                                    fontSize = 13.sp,
-                                    color = TvAccentCyan,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
+                        TvPillButton(
+                            icon = Icons.Default.QrCode2,
+                            label = "Connect Phone (QR)",
+                            onClick = onOpenQrModal,
+                            testTag = "pair_phone_qr_button"
+                        )
 
-                        // Settings Button
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.15f),
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .clickable { onOpenSettings() }
-                                .testTag("settings_button")
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "Settings",
-                                    tint = TvTextPrimary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
+                        TvIconButton(
+                            icon = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            onClick = onOpenSettings,
+                            size = 48.dp,
+                            iconSize = 24.dp,
+                            testTag = "settings_button"
+                        )
                     }
                 }
             }
@@ -342,16 +280,16 @@ fun AmbientHudOverlay(
                     progress = { progress },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(3.dp)
+                        .height(4.dp)
                         .clip(RoundedCornerShape(2.dp)),
                     color = TvAccentCyan,
                     trackColor = Color.White.copy(alpha = 0.2f)
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 if (isPortrait) {
-                    // Portrait Layout: Stacked vertically so title never crowds buttons
+                    // Portrait Layout: Stacked vertically
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -391,67 +329,48 @@ fun AmbientHudOverlay(
                             }
                         }
 
-                        // Playback Controls Row (Centered, fully contained)
+                        // Playback Controls Row
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(
+                            TvIconButton(
+                                icon = Icons.Default.SkipPrevious,
+                                contentDescription = "Previous",
                                 onClick = onPrevious,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.12f))
-                                    .testTag("previous_button")
-                            ) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = TvTextPrimary, modifier = Modifier.size(20.dp))
-                            }
+                                size = 46.dp,
+                                iconSize = 22.dp,
+                                testTag = "previous_button"
+                            )
 
-                            IconButton(
+                            TvIconButton(
+                                icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = "Play/Pause",
                                 onClick = onPlayPauseToggle,
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(TvAccentCyan)
-                                    .testTag("play_pause_button")
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = "Play/Pause",
-                                    tint = Color.Black,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
+                                size = 52.dp,
+                                iconSize = 28.dp,
+                                containerColor = TvAccentCyan,
+                                tint = Color.Black,
+                                focusedBorderColor = Color.White,
+                                testTag = "play_pause_button"
+                            )
 
-                            IconButton(
+                            TvIconButton(
+                                icon = Icons.Default.SkipNext,
+                                contentDescription = "Next",
                                 onClick = onNext,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.12f))
-                                    .testTag("next_button")
-                            ) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = TvTextPrimary, modifier = Modifier.size(20.dp))
-                            }
+                                size = 46.dp,
+                                iconSize = 22.dp,
+                                testTag = "next_button"
+                            )
 
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = Color.White.copy(alpha = 0.15f),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .clickable { onOpenLibrary() }
-                                    .testTag("library_button")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.PhotoAlbum, contentDescription = null, tint = TvTextPrimary, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Timeline", fontSize = 12.sp, color = TvTextPrimary, fontWeight = FontWeight.Medium)
-                                }
-                            }
+                            TvPillButton(
+                                icon = Icons.Default.PhotoAlbum,
+                                label = "Timeline",
+                                onClick = onOpenLibrary,
+                                testTag = "library_button"
+                            )
                         }
                     }
                 } else {
@@ -495,70 +414,146 @@ fun AmbientHudOverlay(
                             }
                         }
 
-                        // Right: Controls
+                        // Right: Controls with clear TV focus borders
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            IconButton(
+                            TvIconButton(
+                                icon = Icons.Default.SkipPrevious,
+                                contentDescription = "Previous",
                                 onClick = onPrevious,
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.12f))
-                                    .testTag("previous_button")
-                            ) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = TvTextPrimary)
-                            }
+                                size = 48.dp,
+                                iconSize = 24.dp,
+                                testTag = "previous_button"
+                            )
 
-                            IconButton(
+                            TvIconButton(
+                                icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = "Play/Pause",
                                 onClick = onPlayPauseToggle,
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .clip(CircleShape)
-                                    .background(TvAccentCyan)
-                                    .testTag("play_pause_button")
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = "Play/Pause",
-                                    tint = Color.Black,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
+                                size = 56.dp,
+                                iconSize = 30.dp,
+                                containerColor = TvAccentCyan,
+                                tint = Color.Black,
+                                focusedBorderColor = Color.White,
+                                testTag = "play_pause_button"
+                            )
 
-                            IconButton(
+                            TvIconButton(
+                                icon = Icons.Default.SkipNext,
+                                contentDescription = "Next",
                                 onClick = onNext,
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.12f))
-                                    .testTag("next_button")
-                            ) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = TvTextPrimary)
-                            }
+                                size = 48.dp,
+                                iconSize = 24.dp,
+                                testTag = "next_button"
+                            )
 
-                            Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = Color.White.copy(alpha = 0.15f),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .clickable { onOpenLibrary() }
-                                    .testTag("library_button")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.PhotoAlbum, contentDescription = "Library", tint = TvTextPrimary, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Timeline (▼)", fontSize = 13.sp, color = TvTextPrimary, fontWeight = FontWeight.Medium)
-                                }
-                            }
+                            TvPillButton(
+                                icon = Icons.Default.PhotoAlbum,
+                                label = "Timeline (▼)",
+                                onClick = onOpenLibrary,
+                                testTag = "library_button"
+                            )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * TV Focus-Aware Icon Button with high-contrast background, solid border, and elevation on D-pad focus.
+ */
+@Composable
+fun TvIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 48.dp,
+    iconSize: Dp = 24.dp,
+    tint: Color = Color.White,
+    containerColor: Color = TvSurfaceElevated,
+    focusedBorderColor: Color = TvAccentCyan,
+    testTag: String = ""
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = CircleShape,
+        color = if (isFocused) TvAccentCyan else containerColor,
+        border = BorderStroke(
+            width = if (isFocused) 3.5.dp else 1.5.dp,
+            color = if (isFocused) Color.White else Color.White.copy(alpha = 0.35f)
+        ),
+        modifier = modifier
+            .size(size)
+            .scale(if (isFocused) 1.14f else 1.0f)
+            .clip(CircleShape)
+            .clickable { onClick() }
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+            .testTag(testTag)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = if (isFocused) Color.Black else tint,
+                modifier = Modifier.size(iconSize)
+            )
+        }
+    }
+}
+
+/**
+ * TV Focus-Aware Pill Button with high-contrast solid background, bold label, and elevation on D-pad focus.
+ */
+@Composable
+fun TvPillButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    accentColor: Color = TvAccentCyan,
+    testTag: String = ""
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = if (isFocused) accentColor else TvSurfaceElevated,
+        border = BorderStroke(
+            width = if (isFocused) 3.5.dp else 1.5.dp,
+            color = if (isFocused) Color.White else accentColor.copy(alpha = 0.6f)
+        ),
+        modifier = modifier
+            .scale(if (isFocused) 1.08f else 1.0f)
+            .clip(RoundedCornerShape(20.dp))
+            .clickable { onClick() }
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+            .testTag(testTag)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isFocused) Color.Black else accentColor,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                color = if (isFocused) Color.Black else Color.White,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -575,7 +570,7 @@ fun SourceBadge(source: String) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = color.copy(alpha = 0.2f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f))
+        border = BorderStroke(1.dp, color.copy(alpha = 0.5f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -593,7 +588,7 @@ fun WeekBadge(week: String) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = TvAccentCyan.copy(alpha = 0.15f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, TvAccentCyan.copy(alpha = 0.4f))
+        border = BorderStroke(1.dp, TvAccentCyan.copy(alpha = 0.4f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -611,7 +606,7 @@ fun OfflineCachedChip() {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = TvAccentEmerald.copy(alpha = 0.2f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, TvAccentEmerald.copy(alpha = 0.6f))
+        border = BorderStroke(1.dp, TvAccentEmerald.copy(alpha = 0.6f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),

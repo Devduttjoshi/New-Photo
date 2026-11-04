@@ -57,8 +57,17 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `embedded google photos test url is configured`() {
-        assertEquals("https://photos.app.goo.gl/4J68BKAjwN3pMTrY9", com.example.data.CloudSyncManager.USER_TEST_ALBUM_URL)
+    fun `browser state opens and closes cleanly in view model`() {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val vm = com.example.ui.SlideshowViewModel(app)
+        org.junit.Assert.assertFalse(vm.uiState.value.isBrowserOpen)
+
+        vm.openBrowser("https://photos.google.com")
+        org.junit.Assert.assertTrue(vm.uiState.value.isBrowserOpen)
+        assertEquals("https://photos.google.com", vm.uiState.value.browserUrl)
+
+        vm.closeBrowser()
+        org.junit.Assert.assertFalse(vm.uiState.value.isBrowserOpen)
     }
 
     @Test
@@ -77,5 +86,52 @@ class ExampleRobolectricTest {
 
         settingsRepo.updateMaxCacheSizeMb(500)
         assertEquals(500, settingsRepo.settings.value.maxCacheSizeMb)
+    }
+
+    @Test
+    fun `sanitizeUrl cleans whitespace, quotes and missing scheme`() {
+        val testWithQuotes = "\"https://photos.google.com/album123\""
+        assertEquals("https://photos.google.com/album123", com.example.data.CloudSyncManager.sanitizeUrl(testWithQuotes))
+
+        val testWithSpaces = "  https://photos.app.goo.gl/test   \n"
+        assertEquals("https://photos.app.goo.gl/test", com.example.data.CloudSyncManager.sanitizeUrl(testWithSpaces))
+
+        val testWithoutScheme = "photos.app.goo.gl/test"
+        assertEquals("https://photos.app.goo.gl/test", com.example.data.CloudSyncManager.sanitizeUrl(testWithoutScheme))
+    }
+
+    @Test
+    fun `boot receiver receives boot broadcast without exception`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val receiver = com.example.receiver.BootReceiver()
+        val intent = android.content.Intent(android.content.Intent.ACTION_BOOT_COMPLETED)
+        receiver.onReceive(context, intent)
+    }
+
+    @Test
+    fun `settings savedGooglePhotosUrl defaults and persists across instances`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo1 = SettingsRepository(context)
+        assertEquals(com.example.data.CloudSyncManager.DEFAULT_GOOGLE_PHOTOS_URL, repo1.settings.value.savedGooglePhotosUrl)
+
+        val customUrl = "https://photos.app.goo.gl/customAlbumLink123"
+        repo1.updateSavedGooglePhotosUrl(customUrl)
+        assertEquals(customUrl, repo1.settings.value.savedGooglePhotosUrl)
+
+        val repo2 = SettingsRepository(context)
+        assertEquals(customUrl, repo2.settings.value.savedGooglePhotosUrl)
+    }
+
+    @Test
+    fun `slideshow view model updates source filter and library state`() {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val vm = com.example.ui.SlideshowViewModel(app)
+        vm.selectSourceFilter("USB")
+        assertEquals("USB", vm.settings.value.activeSourceFilter)
+
+        vm.openLibrary()
+        assertTrue(vm.uiState.value.isLibraryOpen)
+        vm.closeLibrary()
+        org.junit.Assert.assertFalse(vm.uiState.value.isLibraryOpen)
     }
 }
