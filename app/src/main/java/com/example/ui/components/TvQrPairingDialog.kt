@@ -35,7 +35,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,12 +46,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.example.ui.theme.TvAccentCyan
 import com.example.ui.theme.TvAccentEmerald
 import com.example.ui.theme.TvFocusBorder
@@ -71,8 +76,15 @@ fun TvQrPairingDialog(
 ) {
     if (!isOpen) return
 
-    val qrImageBitmap = remember(serverUrl) {
-        QrCodeGenerator.generateQrImageBitmap(serverUrl, 600)
+    val closeFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isOpen) {
+        if (isOpen) {
+            delay(100)
+            try {
+                closeFocusRequester.requestFocus()
+            } catch (_: Exception) {}
+        }
     }
 
     var isCloseButtonFocused by remember { mutableStateOf(false) }
@@ -136,24 +148,25 @@ fun TvQrPairingDialog(
                     var isTopCloseFocused by remember { mutableStateOf(false) }
                     Surface(
                         shape = CircleShape,
-                        color = if (isTopCloseFocused) TvSurfaceElevated else Color.White.copy(alpha = 0.12f),
-                        border = androidx.compose.foundation.BorderStroke(
-                            width = if (isTopCloseFocused) 3.5.dp else 1.dp,
-                            color = if (isTopCloseFocused) TvAccentCyan else Color.White.copy(alpha = 0.2f)
+                        color = if (isTopCloseFocused) TvAccentCyan else TvSurfaceElevated,
+                        border = BorderStroke(
+                            width = if (isTopCloseFocused) 3.5.dp else 2.dp,
+                            color = if (isTopCloseFocused) Color.White else Color.White.copy(alpha = 0.5f)
                         ),
                         modifier = Modifier
                             .size(44.dp)
-                            .clip(CircleShape)
-                            .clickable { onClose() }
+                            .scale(if (isTopCloseFocused) 1.12f else 1.0f)
+                            .focusRequester(closeFocusRequester)
                             .onFocusChanged { isTopCloseFocused = it.isFocused }
                             .focusable()
+                            .clickable { onClose() }
                             .testTag("close_qr_dialog_button")
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Close",
-                                tint = if (isTopCloseFocused) TvAccentCyan else TvTextPrimary,
+                                tint = if (isTopCloseFocused) Color.Black else TvTextPrimary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -173,6 +186,11 @@ fun TvQrPairingDialog(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.width(280.dp)
                     ) {
+                        val displayUrl = if (serverUrl.isNotBlank()) serverUrl else "http://${if (localIpAddress.isNotBlank()) localIpAddress else "192.168.1.100"}:8080"
+                        val qrImageBitmap = remember(displayUrl) {
+                            QrCodeGenerator.generateQrImageBitmap(displayUrl, 512)
+                        }
+
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = Color.White,
@@ -181,25 +199,31 @@ fun TvQrPairingDialog(
                                 .size(260.dp)
                                 .padding(8.dp)
                         ) {
-                            Image(
-                                bitmap = qrImageBitmap,
-                                contentDescription = "QR Code to pair phone",
+                            Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(8.dp)
-                            )
+                                    .background(Color.White)
+                                    .padding(12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    bitmap = qrImageBitmap,
+                                    contentDescription = "QR Code to pair phone",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
 
                         Text(
-                            text = serverUrl,
+                            text = displayUrl,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = TvAccentCyan
                         )
                         Text(
-                            text = "Or type this in your phone's browser",
+                            text = "Or type this address in your phone's browser",
                             fontSize = 11.sp,
                             color = TvTextSecondary
                         )
@@ -278,11 +302,11 @@ fun TvQrPairingDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp)
-                                .scale(if (isCloseButtonFocused) 1.04f else 1.0f)
+                                .scale(if (isCloseButtonFocused) 1.05f else 1.0f)
                                 .onFocusChanged { isCloseButtonFocused = it.isFocused }
                                 .border(
-                                    width = if (isCloseButtonFocused) 3.5.dp else 1.dp,
-                                    color = if (isCloseButtonFocused) TvAccentCyan else Color.White.copy(alpha = 0.2f),
+                                    width = if (isCloseButtonFocused) 3.5.dp else 2.dp,
+                                    color = if (isCloseButtonFocused) Color.White else Color.White.copy(alpha = 0.5f),
                                     shape = RoundedCornerShape(10.dp)
                                 )
                                 .focusable()

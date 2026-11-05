@@ -45,6 +45,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -89,10 +91,15 @@ fun TvPhotoLibrarySheet(
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
+    val closeFocusRequester = remember { FocusRequester() }
 
     // Subtly and automatically trigger metadata & storage verification whenever library is opened
     LaunchedEffect(Unit) {
         onTriggerSubtleRefresh()
+        kotlinx.coroutines.delay(100)
+        try {
+            closeFocusRequester.requestFocus()
+        } catch (_: Exception) {}
     }
 
     // Auto-scroll to currently playing photo
@@ -222,25 +229,25 @@ fun TvPhotoLibrarySheet(
                     var isCloseFocused by remember { mutableStateOf(false) }
                     Surface(
                         shape = CircleShape,
-                        color = if (isCloseFocused) TvSurfaceElevated else Color.White.copy(alpha = 0.12f),
+                        color = if (isCloseFocused) TvAccentCyan else TvSurfaceElevated,
                         border = BorderStroke(
-                            width = if (isCloseFocused) 3.5.dp else 1.dp,
-                            color = if (isCloseFocused) TvAccentCyan else Color.White.copy(alpha = 0.2f)
+                            width = if (isCloseFocused) 3.5.dp else 2.dp,
+                            color = if (isCloseFocused) Color.White else Color.White.copy(alpha = 0.5f)
                         ),
                         modifier = Modifier
                             .size(38.dp)
-                            .scale(if (isCloseFocused) 1.1f else 1.0f)
-                            .clip(CircleShape)
-                            .clickable { onClose() }
+                            .scale(if (isCloseFocused) 1.12f else 1.0f)
+                            .focusRequester(closeFocusRequester)
                             .onFocusChanged { isCloseFocused = it.isFocused }
                             .focusable()
+                            .clickable { onClose() }
                             .testTag("close_library_button")
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Close library",
-                                tint = if (isCloseFocused) TvAccentCyan else TvTextPrimary,
+                                tint = if (isCloseFocused) Color.Black else TvTextPrimary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -395,7 +402,7 @@ fun TvPhotoLibrarySheet(
                             Box {
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
-                                        .data(item.displayUri)
+                                        .data(item.thumbnailUri)
                                         .crossfade(true)
                                         .build(),
                                     contentDescription = item.title,
@@ -543,24 +550,23 @@ private fun LibrarySourcePill(
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = when {
-            isFocused -> TvSurfaceElevated
-            isSelected -> TvAccentCyan.copy(alpha = 0.22f)
+            isFocused -> TvAccentCyan
+            isSelected -> TvSurfaceElevated
             else -> Color.White.copy(alpha = 0.08f)
         },
         border = BorderStroke(
-            width = if (isFocused) 3.dp else if (isSelected) 1.5.dp else 1.dp,
+            width = if (isFocused) 3.5.dp else 1.5.dp,
             color = when {
-                isFocused -> TvAccentCyan
+                isFocused -> Color.White
                 isSelected -> TvAccentCyan
-                else -> Color.White.copy(alpha = 0.12f)
+                else -> Color.White.copy(alpha = 0.45f)
             }
         ),
         modifier = Modifier
-            .scale(if (isFocused) 1.05f else 1.0f)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable { onClick() }
+            .scale(if (isFocused) 1.08f else 1.0f)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
+            .clickable { onClick() }
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -570,14 +576,14 @@ private fun LibrarySourcePill(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isFocused || isSelected) TvAccentCyan else TvTextSecondary,
+                tint = if (isFocused) Color.Black else if (isSelected) TvAccentCyan else TvTextSecondary,
                 modifier = Modifier.size(14.dp)
             )
             Text(
                 text = "$label ($count)",
                 fontSize = 11.sp,
                 fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Medium,
-                color = if (isFocused) TvAccentCyan else if (isSelected) TvTextPrimary else TvTextSecondary
+                color = if (isFocused) Color.Black else if (isSelected) TvAccentCyan else TvTextPrimary
             )
         }
     }
@@ -594,24 +600,23 @@ private fun WeekFilterChip(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = when {
-            isFocused -> TvSurfaceElevated
-            isSelected -> TvAccentCyan
+            isFocused -> TvAccentCyan
+            isSelected -> TvSurfaceElevated
             else -> Color.White.copy(alpha = 0.08f)
         },
         border = BorderStroke(
-            width = if (isFocused) 3.dp else 1.dp,
+            width = if (isFocused) 3.5.dp else 1.5.dp,
             color = when {
-                isFocused -> TvAccentCyan
-                isSelected -> TvAccentCyan.copy(alpha = 0.8f)
-                else -> Color.Transparent
+                isFocused -> Color.White
+                isSelected -> TvAccentCyan
+                else -> Color.White.copy(alpha = 0.45f)
             }
         ),
         modifier = Modifier
             .scale(if (isFocused) 1.08f else 1.0f)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() }
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
+            .clickable { onClick() }
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -620,7 +625,7 @@ private fun WeekFilterChip(
             Icon(
                 imageVector = Icons.Default.DateRange,
                 contentDescription = null,
-                tint = if (isFocused) TvAccentCyan else if (isSelected) Color.Black else TvAccentCyan,
+                tint = if (isFocused) Color.Black else if (isSelected) TvAccentCyan else Color.White,
                 modifier = Modifier.size(13.dp)
             )
             Spacer(modifier = Modifier.width(5.dp))
@@ -628,7 +633,7 @@ private fun WeekFilterChip(
                 text = label,
                 fontSize = 11.sp,
                 fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Medium,
-                color = if (isFocused) TvAccentCyan else if (isSelected) Color.Black else TvTextPrimary
+                color = if (isFocused) Color.Black else if (isSelected) TvAccentCyan else TvTextPrimary
             )
         }
     }

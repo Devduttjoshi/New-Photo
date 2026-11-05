@@ -50,6 +50,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -98,6 +101,8 @@ fun TvSettingsDrawer(
     onUpdateKenBurns: (Boolean) -> Unit,
     onUpdateShowClock: (Boolean) -> Unit,
     onUpdateShowMetadata: (Boolean) -> Unit,
+    onUpdateAlwaysShowClock: (Boolean) -> Unit = {},
+    onUpdateAlwaysShowPhotoTakenDate: (Boolean) -> Unit = {},
     onUpdateShuffle: (Boolean) -> Unit,
     onUpdateSourceFilter: (String) -> Unit,
     onScanUsb: () -> Unit,
@@ -108,6 +113,9 @@ fun TvSettingsDrawer(
     onOpenQrModal: () -> Unit,
     onUpdateFramingMode: (String) -> Unit,
     onOpenBrowser: (String) -> Unit = {},
+    albumLinks: List<com.example.model.AlbumLinkItem> = emptyList(),
+    onToggleAlbumIncluded: (Long, Boolean) -> Unit = { _, _ -> },
+    onRemoveAlbumLink: (com.example.model.AlbumLinkItem) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var customCloudUrl by remember { mutableStateOf("") }
@@ -150,28 +158,36 @@ fun TvSettingsDrawer(
                         )
                     }
 
+                    val closeFocusRequester = remember { FocusRequester() }
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(100)
+                        try {
+                            closeFocusRequester.requestFocus()
+                        } catch (_: Exception) {}
+                    }
+
                     var isCloseFocused by remember { mutableStateOf(false) }
                     Surface(
                         shape = CircleShape,
-                        color = if (isCloseFocused) TvSurfaceElevated else Color.White.copy(alpha = 0.12f),
+                        color = if (isCloseFocused) TvAccentCyan else TvSurfaceElevated,
                         border = BorderStroke(
-                            width = if (isCloseFocused) 3.dp else 1.dp,
-                            color = if (isCloseFocused) TvAccentCyan else Color.White.copy(alpha = 0.2f)
+                            width = if (isCloseFocused) 3.5.dp else 2.dp,
+                            color = if (isCloseFocused) Color.White else Color.White.copy(alpha = 0.5f)
                         ),
                         modifier = Modifier
                             .size(44.dp)
-                            .scale(if (isCloseFocused) 1.1f else 1.0f)
-                            .clip(CircleShape)
-                            .clickable { onClose() }
+                            .scale(if (isCloseFocused) 1.12f else 1.0f)
+                            .focusRequester(closeFocusRequester)
                             .onFocusChanged { isCloseFocused = it.isFocused }
                             .focusable()
+                            .clickable { onClose() }
                             .testTag("close_settings_button")
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Close settings",
-                                tint = if (isCloseFocused) TvAccentCyan else TvTextPrimary,
+                                tint = if (isCloseFocused) Color.Black else TvTextPrimary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -255,8 +271,8 @@ fun TvSettingsDrawer(
                                                 onSyncCustomUrl(clip)
                                             }
                                         },
-                                        containerColor = Color.White.copy(alpha = 0.15f),
-                                        contentColor = TvTextPrimary,
+                                        containerColor = TvSurfaceElevated,
+                                        contentColor = Color.White,
                                         modifier = Modifier.weight(1f),
                                         testTag = "paste_clipboard_button"
                                     )
@@ -306,11 +322,72 @@ fun TvSettingsDrawer(
                                     text = "Pair Phone via QR Code",
                                     icon = Icons.Default.QrCode2,
                                     onClick = onOpenQrModal,
-                                    containerColor = TvAccentCyan.copy(alpha = 0.2f),
+                                    containerColor = TvSurfaceElevated,
                                     contentColor = TvAccentCyan,
                                     focusedBorderColor = TvAccentCyan,
                                     testTag = "open_qr_pairing_from_settings"
                                 )
+                            }
+                        }
+                    }
+
+                    // SECTION 2: LINK LIBRARY (Stored Album Links, Photo Counts, Slideshow Inclusions, Remove Button)
+                    item {
+                        SettingsSectionTitle("Link Library • Stored Albums")
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = TvSurfaceElevated,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Albums in Library (${albumLinks.size})",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = TvTextPrimary
+                                        )
+                                        Text(
+                                            text = "Select which albums to include in the slideshow. Remove unwanted links anytime.",
+                                            fontSize = 11.sp,
+                                            color = TvTextSecondary
+                                        )
+                                    }
+                                }
+
+                                if (albumLinks.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color.White.copy(alpha = 0.04f), RoundedCornerShape(8.dp))
+                                            .padding(14.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "No saved album links yet. Paste an album link above or scan phone QR to store albums.",
+                                            fontSize = 12.sp,
+                                            color = TvTextSecondary
+                                        )
+                                    }
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        albumLinks.forEach { album ->
+                                            AlbumLinkCard(
+                                                album = album,
+                                                onToggleIncluded = { isInc -> onToggleAlbumIncluded(album.id, isInc) },
+                                                onRemove = { onRemoveAlbumLink(album) }
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -631,6 +708,20 @@ fun TvSettingsDrawer(
                                 onCheckedChange = onUpdateShowClock
                             )
                             TvToggleCard(
+                                icon = Icons.Default.Timer,
+                                title = "Always Display Clock",
+                                subtitle = "Keep digital clock visible on screen",
+                                checked = settings.alwaysShowClock,
+                                onCheckedChange = onUpdateAlwaysShowClock
+                            )
+                            TvToggleCard(
+                                icon = Icons.Default.DateRange,
+                                title = "Always Display Photo Taken Date",
+                                subtitle = "Show date and time when photo was taken",
+                                checked = settings.alwaysShowPhotoTakenDate,
+                                onCheckedChange = onUpdateAlwaysShowPhotoTakenDate
+                            )
+                            TvToggleCard(
                                 icon = Icons.Default.Refresh,
                                 title = "Shuffle Slideshow",
                                 subtitle = "Randomize photo order (off = album progression)",
@@ -679,7 +770,7 @@ fun TvSettingsDrawer(
                                     text = "Launch Web Browser",
                                     icon = Icons.Default.Language,
                                     onClick = { onOpenBrowser("https://photos.google.com") },
-                                    containerColor = TvAccentCyan.copy(alpha = 0.2f),
+                                    containerColor = TvSurfaceElevated,
                                     contentColor = TvAccentCyan,
                                     focusedBorderColor = TvAccentCyan,
                                     testTag = "open_web_browser_btn"
@@ -694,7 +785,8 @@ fun TvSettingsDrawer(
 }
 
 /**
- * TV Focus-Aware Full Action Button with high-contrast 3.5dp border and elevation on D-pad focus.
+ * TV Focus-Aware Full Action Button with high-contrast 3.5dp border and solid surface.
+ * Guarantees visible, high-contrast text and icons on all TV display profiles.
  */
 @Composable
 fun TvActionButton(
@@ -702,29 +794,47 @@ fun TvActionButton(
     icon: ImageVector?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    containerColor: Color = TvAccentCyan,
-    contentColor: Color = Color.Black,
+    containerColor: Color = TvSurfaceElevated,
+    contentColor: Color = Color.White,
     focusedBorderColor: Color = TvAccentCyan,
     enabled: Boolean = true,
     testTag: String = ""
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
+    // When focused: bright cyan background with black text.
+    // When unfocused: solid elevated container with crisp white text.
+    val effectiveBg = when {
+        !enabled -> containerColor.copy(alpha = 0.4f)
+        isFocused -> TvAccentCyan
+        else -> containerColor
+    }
+
+    val effectiveText = when {
+        !enabled -> Color.White.copy(alpha = 0.5f)
+        isFocused -> Color.Black
+        else -> contentColor
+    }
+
+    val effectiveBorder = when {
+        isFocused -> Color.White
+        else -> Color.White.copy(alpha = 0.5f)
+    }
+
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = if (isFocused) TvSurfaceElevated else containerColor.copy(alpha = if (enabled) 1f else 0.5f),
+        color = effectiveBg,
         border = BorderStroke(
-            width = if (isFocused) 3.5.dp else 1.dp,
-            color = if (isFocused) focusedBorderColor else Color.Transparent
+            width = if (isFocused) 3.5.dp else 2.dp,
+            color = effectiveBorder
         ),
         modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
-            .scale(if (isFocused) 1.04f else 1.0f)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(enabled = enabled) { onClick() }
+            .scale(if (isFocused) 1.05f else 1.0f)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable(enabled = enabled)
+            .clickable(enabled = enabled) { onClick() }
             .testTag(testTag)
     ) {
         Row(
@@ -736,14 +846,14 @@ fun TvActionButton(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (isFocused) focusedBorderColor else contentColor,
+                    tint = effectiveText,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
                 text = text,
-                color = if (isFocused) Color.White else contentColor,
+                color = effectiveText,
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp
             )
@@ -777,16 +887,15 @@ private fun TvToggleCard(
         shape = RoundedCornerShape(12.dp),
         color = if (isFocused) TvSurfaceElevated else TvSurfaceElevated.copy(alpha = 0.5f),
         border = BorderStroke(
-            width = if (isFocused) 3.5.dp else 1.dp,
-            color = if (isFocused) TvAccentCyan else Color.White.copy(alpha = 0.1f)
+            width = if (isFocused) 3.5.dp else 1.5.dp,
+            color = if (isFocused) Color.White else Color.White.copy(alpha = 0.35f)
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .scale(if (isFocused) 1.02f else 1.0f)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onCheckedChange(!checked) }
+            .scale(if (isFocused) 1.03f else 1.0f)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
+            .clickable { onCheckedChange(!checked) }
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -836,27 +945,26 @@ private fun TvOptionPill(
     Surface(
         shape = RoundedCornerShape(8.dp),
         color = when {
-            isFocused -> TvSurfaceElevated
-            isSelected -> TvAccentCyan
+            isFocused -> TvAccentCyan
+            isSelected -> TvSurfaceElevated
             else -> Color.White.copy(alpha = 0.08f)
         },
         border = BorderStroke(
-            width = if (isFocused) 3.5.dp else 1.dp,
+            width = if (isFocused) 3.5.dp else 1.5.dp,
             color = when {
-                isFocused -> TvAccentCyan
-                isSelected -> TvAccentCyan.copy(alpha = 0.8f)
-                else -> Color.White.copy(alpha = 0.12f)
+                isFocused -> Color.White
+                isSelected -> TvAccentCyan
+                else -> Color.White.copy(alpha = 0.45f)
             }
         ),
         modifier = modifier
-            .scale(if (isFocused) 1.06f else 1.0f)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable { onClick() }
+            .scale(if (isFocused) 1.08f else 1.0f)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
+            .clickable { onClick() }
     ) {
         Box(
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 10.dp),
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -864,11 +972,140 @@ private fun TvOptionPill(
                 fontSize = 12.sp,
                 fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Medium,
                 color = when {
-                    isFocused -> TvAccentCyan
-                    isSelected -> Color.Black
-                    else -> TvTextPrimary
+                    isFocused -> Color.Black
+                    isSelected -> TvAccentCyan
+                    else -> Color.White
                 }
             )
+        }
+    }
+}
+
+/**
+ * Focus-aware Card displaying an album in the Link Library:
+ * Shows album title, photo count, inclusion toggle, and a separate remove button.
+ * Fully navigable via TV remote D-pad with prominent 3.5dp borders.
+ */
+@Composable
+private fun AlbumLinkCard(
+    album: com.example.model.AlbumLinkItem,
+    onToggleIncluded: (Boolean) -> Unit,
+    onRemove: () -> Unit
+) {
+    var isToggleFocused by remember { mutableStateOf(false) }
+    var isRemoveFocused by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = TvSurfaceDark.copy(alpha = 0.85f),
+        border = BorderStroke(
+            width = 1.5.dp,
+            color = Color.White.copy(alpha = 0.35f)
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Main Album Button: Toggles inclusion in slideshow
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = when {
+                    isToggleFocused -> TvAccentCyan
+                    album.isIncludedInSlideshow -> TvAccentCyan.copy(alpha = 0.15f)
+                    else -> Color.White.copy(alpha = 0.06f)
+                },
+                border = BorderStroke(
+                    width = if (isToggleFocused) 3.5.dp else 1.5.dp,
+                    color = if (isToggleFocused) Color.White else if (album.isIncludedInSlideshow) TvAccentCyan else Color.White.copy(alpha = 0.35f)
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .scale(if (isToggleFocused) 1.03f else 1.0f)
+                    .onFocusChanged { isToggleFocused = it.isFocused }
+                    .focusable()
+                    .clickable { onToggleIncluded(!album.isIncludedInSlideshow) }
+                    .testTag("toggle_album_${album.id}")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = album.albumName,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isToggleFocused) Color.Black else TvTextPrimary,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "${album.photoCount} photos",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isToggleFocused) Color.Black else TvAccentCyan
+                            )
+                            Text(
+                                text = if (album.isIncludedInSlideshow) "• In Slideshow" else "• Excluded",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (isToggleFocused) Color.Black else if (album.isIncludedInSlideshow) TvAccentEmerald else TvTextSecondary
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = album.isIncludedInSlideshow,
+                        onCheckedChange = null,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = if (isToggleFocused) Color.Black else TvAccentCyan,
+                            checkedTrackColor = if (isToggleFocused) Color.White else TvAccentBlue
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            // Dedicated Remove Album Button
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (isRemoveFocused) Color(0xFFEF4444) else Color(0xFFEF4444).copy(alpha = 0.15f),
+                border = BorderStroke(
+                    width = if (isRemoveFocused) 3.5.dp else 1.5.dp,
+                    color = if (isRemoveFocused) Color.White else Color(0xFFEF4444)
+                ),
+                modifier = Modifier
+                    .scale(if (isRemoveFocused) 1.08f else 1.0f)
+                    .onFocusChanged { isRemoveFocused = it.isFocused }
+                    .focusable()
+                    .clickable { onRemove() }
+                    .testTag("remove_album_${album.id}")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Remove album",
+                        tint = if (isRemoveFocused) Color.White else Color(0xFFEF4444),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Remove",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isRemoveFocused) Color.White else Color(0xFFEF4444)
+                    )
+                }
+            }
         }
     }
 }

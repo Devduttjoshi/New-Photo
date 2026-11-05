@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.example.model.PhotoItem
 import kotlinx.coroutines.flow.Flow
@@ -55,6 +56,9 @@ interface PhotoDao {
     @Query("DELETE FROM photos WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    @Query("DELETE FROM photos WHERE albumName = :albumName")
+    suspend fun deleteByAlbumName(albumName: String)
+
     @Query("DELETE FROM photos WHERE source = :source")
     suspend fun deleteBySource(source: String)
 
@@ -64,9 +68,46 @@ interface PhotoDao {
     @Query("SELECT COUNT(*) FROM photos")
     suspend fun getCount(): Int
 
+    @Query("SELECT COUNT(*) FROM photos WHERE source != 'DEMO'")
+    suspend fun getRealPhotosCount(): Int
+
+    @Query("SELECT COUNT(*) FROM photos WHERE source = 'DEMO'")
+    suspend fun getDemoPhotosCount(): Int
+
     @Query("SELECT COUNT(*) FROM photos WHERE isCached = 1")
     suspend fun getCachedCount(): Int
 
     @Query("SELECT * FROM photos WHERE isCached = 0 AND source = 'CLOUD' ORDER BY albumProgressionIndex ASC LIMIT :limit")
     suspend fun getUncachedCloudPhotos(limit: Int = 20): List<PhotoItem>
+
+    @Query("SELECT * FROM photos WHERE albumName = :albumName ORDER BY albumProgressionIndex ASC")
+    suspend fun getPhotosByAlbumName(albumName: String): List<PhotoItem>
+
+    @Query("UPDATE photos SET source = 'DEMO', albumName = 'Demo / Sample Photos' WHERE uri LIKE '%images.unsplash.com%' OR albumName = 'Scenic Landscapes'")
+    suspend fun segregateLegacyDemoPhotos()
+
+    @Transaction
+    suspend fun upsertPhotos(photos: List<PhotoItem>): List<PhotoItem> {
+        val existing = getAllPhotosList().associateBy { it.uri }
+        val result = mutableListOf<PhotoItem>()
+        for (incoming in photos.distinctBy { it.uri }) {
+            val old = existing[incoming.uri]
+            if (old != null) {
+                val updated = incoming.copy(
+                    id = old.id,
+                    localCachedPath = old.localCachedPath ?: incoming.localCachedPath,
+                    isCached = old.isCached || incoming.isCached,
+                    fileSizeBytes = if (old.fileSizeBytes > 0) old.fileSizeBytes else incoming.fileSizeBytes,
+                    lastShownTimestamp = old.lastShownTimestamp,
+                    showCount = old.showCount
+                )
+                update(updated)
+                result.add(updated)
+            } else {
+                val newId = insert(incoming)
+                result.add(incoming.copy(id = newId))
+            }
+        }
+        return result
+    }
 }

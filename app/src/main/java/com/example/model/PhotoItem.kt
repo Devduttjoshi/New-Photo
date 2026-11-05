@@ -8,12 +8,16 @@ enum class PhotoSource(val displayName: String) {
     USB("USB Storage"),
     CLOUD("Cloud Synced"),
     PRELOADED("Ambient Gallery"),
-    LOCAL("Local Storage")
+    LOCAL("Local Storage"),
+    DEMO("Demo / Sample")
 }
 
 @Entity(
     tableName = "photos",
     indices = [
+        Index(value = ["uri"], unique = true),
+        Index(value = ["source"]),
+        Index(value = ["albumName"]),
         Index(value = ["weekLabel"]),
         Index(value = ["albumProgressionIndex"]),
         Index(value = ["isCached"])
@@ -43,4 +47,22 @@ data class PhotoItem(
      */
     val displayUri: String
         get() = localCachedPath ?: uri
+
+    /**
+     * Compact lightweight thumbnail URL (e.g. w400 for Google Photos) to avoid downloading
+     * multi-megabyte 2048px images in the library browser.
+     */
+    val thumbnailUri: String
+        get() {
+            if (localCachedPath != null) return localCachedPath
+            if (uri.contains("googleusercontent.com")) {
+                val base = uri.substringBefore("=")
+                return "$base=w400"
+            }
+            if (uri.contains("images.unsplash.com")) {
+                val base = uri.substringBefore("?")
+                return "$base?w=400&q=70"
+            }
+            return uri
+        }
 }

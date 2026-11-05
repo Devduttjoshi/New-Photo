@@ -54,7 +54,8 @@ fun CrossfadeImageLayer(
 
     LaunchedEffect(crossfadeSequence) {
         if (currentPhoto != null) {
-            displayedBackground = previousPhoto ?: displayedForeground
+            val oldFg = displayedForeground
+            displayedBackground = previousPhoto ?: oldFg
             displayedForeground = currentPhoto
 
             // Reset animations
@@ -85,15 +86,16 @@ fun CrossfadeImageLayer(
             }
 
             // 3. Smooth Crossfade Transition
-            launch {
-                alphaAnim.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(
-                        durationMillis = crossfadeDurationMs.coerceIn(400, 5000),
-                        easing = FastOutSlowInEasing
-                    )
+            alphaAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = crossfadeDurationMs.coerceIn(400, 5000),
+                    easing = FastOutSlowInEasing
                 )
-            }
+            )
+
+            // At the end of transition, sync background to current foreground so no old photo gets stuck underneath
+            displayedBackground = currentPhoto
         }
     }
 

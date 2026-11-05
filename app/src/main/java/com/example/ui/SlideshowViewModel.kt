@@ -50,17 +50,19 @@ data class SlideshowUiState(
     val sessionResumedNotice: String = "",
     val isLibraryRefreshing: Boolean = false,
     val isBrowserOpen: Boolean = false,
-    val browserUrl: String = "https://photos.google.com"
+    val browserUrl: String = "https://photos.google.com",
+    val albumLinks: List<com.example.model.AlbumLinkItem> = emptyList()
 )
 
 class SlideshowViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getInstance(application)
     private val photoDao = db.photoDao()
+    private val albumLinkDao = db.albumLinkDao()
     val settingsRepo = SettingsRepository.getInstance(application)
     val settings: StateFlow<SlideshowSettings> = settingsRepo.settings
 
     private val offlineCacheManager = OfflineCacheManager(application, photoDao)
-    val cloudSyncManager = CloudSyncManager(offlineCacheManager, photoDao)
+    val cloudSyncManager = CloudSyncManager(offlineCacheManager, photoDao, albumLinkDao)
     private val usbScanner = UsbStorageScanner(application)
 
     private val _uiState = MutableStateFlow(SlideshowUiState())
@@ -82,17 +84,44 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
 
-        // Collect photos and settings
+        // Observe stored album links for the Link Library
         viewModelScope.launch {
-            combine(photoDao.getAllPhotos(), settings) { photos, currentSettings ->
-                Pair(photos, currentSettings)
-            }.collect { (photos, currentSettings) ->
+            albumLinkDao.getAllAlbumLinks().collect { links ->
+                _uiState.value = _uiState.value.copy(albumLinks = links)
+            }
+        }
+
+        // Collect photos, settings, and album link selection
+        viewModelScope.launch {
+            combine(photoDao.getAllPhotos(), settings, albumLinkDao.getAllAlbumLinks()) { photos, currentSettings, albumLinks ->
+                Triple(photos, currentSettings, albumLinks)
+            }.collect { (photos, currentSettings, albumLinks) ->
+                val hasUserPhotos = photos.any { it.source != PhotoSource.DEMO.name }
+                val activePhotos = if (hasUserPhotos) {
+                    photos.filter { it.source != PhotoSource.DEMO.name }
+                } else {
+                    photos
+                }
+
+                // Determine which cloud album names are excluded by the user
+                val excludedAlbumNames = albumLinks
+                    .filter { !it.isIncludedInSlideshow }
+                    .map { it.albumName }
+                    .toSet()
+
+                // Filter out photos belonging to unselected albums
+                val albumFilteredPhotos = if (excludedAlbumNames.isNotEmpty()) {
+                    activePhotos.filter { it.source != PhotoSource.CLOUD.name || !excludedAlbumNames.contains(it.albumName) }
+                } else {
+                    activePhotos
+                }
+
                 // Filter by source
                 var filtered = when (currentSettings.activeSourceFilter) {
-                    "USB" -> photos.filter { it.source == PhotoSource.USB.name }
-                    "CLOUD" -> photos.filter { it.source == PhotoSource.CLOUD.name }
-                    "PHONE" -> photos.filter { it.source == PhotoSource.LOCAL.name }
-                    else -> photos
+                    "USB" -> albumFilteredPhotos.filter { it.source == PhotoSource.USB.name }
+                    "CLOUD" -> albumFilteredPhotos.filter { it.source == PhotoSource.CLOUD.name }
+                    "PHONE" -> albumFilteredPhotos.filter { it.source == PhotoSource.LOCAL.name }
+                    else -> albumFilteredPhotos
                 }
 
                 // Filter by week timeline if set
@@ -520,7 +549,8 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun syncCustomCloudUrl(url: String) {
-        val clean = CloudSyncManager.sanitizeUrl(url)
+        val targetUrl = if (url.trim() == "1234") "https://photos.app.goo.gl/mwFXXYhT5P5mMD9x6" else url
+        val clean = CloudSyncManager.sanitizeUrl(targetUrl)
         if (clean.isBlank()) return
         settingsRepo.updateSavedGooglePhotosUrl(clean)
         viewModelScope.launch {
@@ -550,6 +580,25 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun selectSourceFilter(filter: String) {
         settingsRepo.updateSourceFilter(filter)
+    }
+
+    fun toggleAlbumIncluded(albumId: Long, isIncluded: Boolean) {
+        viewModelScope.launch {
+            albumLinkDao.setIncludedInSlideshow(albumId, isIncluded)
+        }
+    }
+
+    fun removeAlbumLink(album: com.example.model.AlbumLinkItem) {
+        viewModelScope.launch {
+            // 1. Remove album entry from link library
+            albumLinkDao.deleteById(album.id)
+            // 2. Remove associated cloud photos from database
+            photoDao.deleteByAlbumName(album.albumName)
+            _uiState.value = _uiState.value.copy(
+                syncStatusMessage = "Removed album '${album.albumName}'"
+            )
+            refreshCacheStats()
+        }
     }
 
     fun refreshLibrarySubtly() {
@@ -601,10 +650,15 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
         scheduleHudAutoHide()
     }
 
+    fun hideHud() {
+        hudHideJob?.cancel()
+        _uiState.value = _uiState.value.copy(isHudVisible = false)
+    }
+
     private fun scheduleHudAutoHide() {
         hudHideJob?.cancel()
         hudHideJob = viewModelScope.launch {
-            delay(4500)
+            delay(6000)
             if (!_uiState.value.isSettingsOpen &&
                 !_uiState.value.isLibraryOpen &&
                 !_uiState.value.isQrModalOpen

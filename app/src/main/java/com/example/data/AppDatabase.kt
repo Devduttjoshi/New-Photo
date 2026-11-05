@@ -6,9 +6,10 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.model.PhotoItem
 
-@Database(entities = [PhotoItem::class], version = 2, exportSchema = false)
+@Database(entities = [PhotoItem::class, com.example.model.AlbumLinkItem::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun photoDao(): PhotoDao
+    abstract fun albumLinkDao(): AlbumLinkDao
 
     companion object {
         @Volatile

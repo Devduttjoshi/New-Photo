@@ -14,6 +14,8 @@ data class SlideshowSettings(
     val kenBurnsEnabled: Boolean = true,
     val showClockAndDate: Boolean = true,
     val showMetadataBadge: Boolean = true,
+    val alwaysShowClock: Boolean = true,
+    val alwaysShowPhotoTakenDate: Boolean = true,
     val shuffleOrder: Boolean = false,
     val cacheCloudPhotosOffline: Boolean = true,
     val activeSourceFilter: String = "ALL", // "ALL", "USB", "CLOUD"
@@ -42,6 +44,8 @@ class SettingsRepository(context: Context) {
             kenBurnsEnabled = prefs.getBoolean(KEY_KEN_BURNS, true),
             showClockAndDate = prefs.getBoolean(KEY_SHOW_CLOCK, true),
             showMetadataBadge = prefs.getBoolean(KEY_SHOW_METADATA, true),
+            alwaysShowClock = prefs.getBoolean(KEY_ALWAYS_SHOW_CLOCK, true),
+            alwaysShowPhotoTakenDate = prefs.getBoolean(KEY_ALWAYS_SHOW_TAKEN_DATE, true),
             shuffleOrder = prefs.getBoolean(KEY_SHUFFLE, false),
             cacheCloudPhotosOffline = prefs.getBoolean(KEY_CACHE_OFFLINE, true),
             activeSourceFilter = prefs.getString(KEY_SOURCE_FILTER, "ALL") ?: "ALL",
@@ -94,6 +98,16 @@ class SettingsRepository(context: Context) {
     fun updateShowMetadata(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_SHOW_METADATA, enabled).apply()
         _settings.value = _settings.value.copy(showMetadataBadge = enabled)
+    }
+
+    fun updateAlwaysShowClock(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ALWAYS_SHOW_CLOCK, enabled).apply()
+        _settings.value = _settings.value.copy(alwaysShowClock = enabled)
+    }
+
+    fun updateAlwaysShowPhotoTakenDate(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ALWAYS_SHOW_TAKEN_DATE, enabled).apply()
+        _settings.value = _settings.value.copy(alwaysShowPhotoTakenDate = enabled)
     }
 
     fun updateShuffle(enabled: Boolean) {
@@ -150,6 +164,8 @@ class SettingsRepository(context: Context) {
         private const val KEY_KEN_BURNS = "ken_burns"
         private const val KEY_SHOW_CLOCK = "show_clock"
         private const val KEY_SHOW_METADATA = "show_metadata"
+        private const val KEY_ALWAYS_SHOW_CLOCK = "always_show_clock"
+        private const val KEY_ALWAYS_SHOW_TAKEN_DATE = "always_show_taken_date"
         private const val KEY_SHUFFLE = "shuffle"
         private const val KEY_CACHE_OFFLINE = "cache_offline"
         private const val KEY_SOURCE_FILTER = "source_filter"
