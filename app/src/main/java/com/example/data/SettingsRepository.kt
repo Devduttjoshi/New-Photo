@@ -25,7 +25,10 @@ data class SlideshowSettings(
     val maxCacheSizeMb: Int = 250, // Rolling cache cap to protect TV disk storage
     val lastSessionPhotoId: Long = 0L,
     val lastSessionIndex: Int = 0,
-    val savedGooglePhotosUrl: String = ""
+    val savedGooglePhotosUrl: String = "",
+    val coverFlowEnabled: Boolean = false,
+    val coverFlowAngle: Float = 45f,
+    val coverFlowSpacing: Float = 0.5f
 )
 
 class SettingsRepository(context: Context) {
@@ -55,7 +58,10 @@ class SettingsRepository(context: Context) {
             maxCacheSizeMb = prefs.getInt(KEY_MAX_CACHE_MB, 250),
             lastSessionPhotoId = prefs.getLong(KEY_LAST_PHOTO_ID, 0L),
             lastSessionIndex = prefs.getInt(KEY_LAST_INDEX, 0),
-            savedGooglePhotosUrl = prefs.getString(KEY_SAVED_GOOGLE_PHOTOS_URL, "") ?: ""
+            savedGooglePhotosUrl = prefs.getString(KEY_SAVED_GOOGLE_PHOTOS_URL, "") ?: "",
+            coverFlowEnabled = prefs.getBoolean(KEY_COVER_FLOW_ENABLED, false),
+            coverFlowAngle = prefs.getFloat(KEY_COVER_FLOW_ANGLE, 45f),
+            coverFlowSpacing = prefs.getFloat(KEY_COVER_FLOW_SPACING, 0.5f)
         )
     }
 
@@ -156,6 +162,21 @@ class SettingsRepository(context: Context) {
         )
     }
 
+    fun updateCoverFlowEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_COVER_FLOW_ENABLED, enabled).apply()
+        _settings.value = _settings.value.copy(coverFlowEnabled = enabled)
+    }
+
+    fun updateCoverFlowAngle(angle: Float) {
+        prefs.edit().putFloat(KEY_COVER_FLOW_ANGLE, angle).apply()
+        _settings.value = _settings.value.copy(coverFlowAngle = angle)
+    }
+
+    fun updateCoverFlowSpacing(spacing: Float) {
+        prefs.edit().putFloat(KEY_COVER_FLOW_SPACING, spacing).apply()
+        _settings.value = _settings.value.copy(coverFlowSpacing = spacing)
+    }
+
     companion object {
         private const val KEY_AUTO_BOOT = "auto_boot"
         private const val KEY_AUTO_RESUME = "auto_resume"
@@ -176,6 +197,9 @@ class SettingsRepository(context: Context) {
         private const val KEY_LAST_PHOTO_ID = "last_photo_id"
         private const val KEY_LAST_INDEX = "last_index"
         private const val KEY_SAVED_GOOGLE_PHOTOS_URL = "saved_google_photos_url"
+        private const val KEY_COVER_FLOW_ENABLED = "cover_flow_enabled"
+        private const val KEY_COVER_FLOW_ANGLE = "cover_flow_angle"
+        private const val KEY_COVER_FLOW_SPACING = "cover_flow_spacing"
 
         @Volatile
         private var INSTANCE: SettingsRepository? = null

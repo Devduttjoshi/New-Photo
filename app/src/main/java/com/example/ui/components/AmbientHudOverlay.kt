@@ -159,8 +159,8 @@ fun AmbientHudOverlay(
             val prevPhoto = if (displayList.isNotEmpty()) displayList[(currentIndex - 1 + displayList.size) % displayList.size] else null
             val nextPhoto = if (displayList.isNotEmpty()) displayList[(currentIndex + 1) % displayList.size] else null
 
-            // 1. LEFT EDGE PREVIEW (Previous Photo with AnimatedContent transition)
-            if (prevPhoto != null) {
+            // 1. LEFT EDGE PREVIEW (Previous Photo with AnimatedContent transition - Landscape/TV only)
+            if (!isPortrait && prevPhoto != null) {
                 AnimatedContent(
                     targetState = prevPhoto,
                     transitionSpec = {
@@ -196,8 +196,8 @@ fun AmbientHudOverlay(
                 }
             }
 
-            // 2. RIGHT EDGE PREVIEW (Next Photo with AnimatedContent transition)
-            if (nextPhoto != null) {
+            // 2. RIGHT EDGE PREVIEW (Next Photo with AnimatedContent transition - Landscape/TV only)
+            if (!isPortrait && nextPhoto != null) {
                 AnimatedContent(
                     targetState = nextPhoto,
                     transitionSpec = {
@@ -329,6 +329,30 @@ fun AmbientHudOverlay(
                     iconSize = 28.dp,
                     testTag = "next_button"
                 )
+            }
+
+            // Remote D-pad Shortcut Hints Bar
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 110.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("▲ Up: Settings", fontSize = 11.sp, color = TvAccentCyan, fontWeight = FontWeight.Bold)
+                    Text("•", fontSize = 11.sp, color = TvTextMuted)
+                    Text("▼ Down: Timeline", fontSize = 11.sp, color = TvAccentAmber, fontWeight = FontWeight.Bold)
+                    Text("•", fontSize = 11.sp, color = TvTextMuted)
+                    Text("◄► Change Photo", fontSize = 11.sp, color = TvTextSecondary)
+                    Text("•", fontSize = 11.sp, color = TvTextMuted)
+                    Text("OK: Play/Pause", fontSize = 11.sp, color = TvTextSecondary)
+                }
             }
 
             // 5. BOTTOM METADATA BAR (Order, Album, Taken Date & Time)

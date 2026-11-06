@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
@@ -51,7 +52,8 @@ data class SlideshowUiState(
     val isLibraryRefreshing: Boolean = false,
     val isBrowserOpen: Boolean = false,
     val browserUrl: String = "https://photos.google.com",
-    val albumLinks: List<com.example.model.AlbumLinkItem> = emptyList()
+    val albumLinks: List<com.example.model.AlbumLinkItem> = emptyList(),
+    val isCoverFlowViewOpen: Boolean = false
 )
 
 class SlideshowViewModel(application: Application) : AndroidViewModel(application) {
@@ -558,22 +560,40 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
                 isSyncing = true,
                 syncStatusMessage = "Fetching album metadata..."
             )
-            val results = cloudSyncManager.indexAlbumMetadata(clean, limit = 2000)
-            val message = if (results.isNotEmpty()) {
-                "Imported ${results.size} photos into album!"
-            } else {
-                "No photos found. Check link or album sharing permission."
-            }
-            _uiState.value = _uiState.value.copy(
-                isSyncing = false,
-                syncStatusMessage = message
-            )
-            refreshCacheStats()
-            if (results.isNotEmpty()) {
-                settingsRepo.updateSourceFilter("ALL")
-                settingsRepo.updateWeekFilter("ALL")
-                delay(300)
-                jumpToPhoto(0)
+            try {
+                val results = cloudSyncManager.indexAlbumMetadata(clean, limit = 2000)
+                val message = if (results.isNotEmpty()) {
+                    "Imported ${results.size} photos into album!"
+                } else {
+                    "No photos found. [ERR-PARSE-NO-DATA]: Album page returned no photos or is private/inaccessible."
+                }
+                _uiState.value = _uiState.value.copy(
+                    isSyncing = false,
+                    syncStatusMessage = message
+                )
+                refreshCacheStats()
+                if (results.isNotEmpty()) {
+                    settingsRepo.updateSourceFilter("ALL")
+                    settingsRepo.updateWeekFilter("ALL")
+                    delay(300)
+                    jumpToPhoto(0)
+                }
+            } catch (e: Exception) {
+                val msg = e.message ?: e.toString()
+                val errorCode = when {
+                    msg.contains("403") -> "ERR-HTTP-403"
+                    msg.contains("404") -> "ERR-HTTP-404"
+                    msg.contains("500") -> "ERR-HTTP-500"
+                    msg.contains("timeout", ignoreCase = true) || msg.contains("timed out", ignoreCase = true) -> "ERR-NET-TIMEOUT"
+                    msg.contains("Unable to resolve host", ignoreCase = true) || msg.contains("No address associated", ignoreCase = true) -> "ERR-NET-DNS"
+                    else -> "ERR-CLOUD-GENERAL"
+                }
+                val errorMsg = "Failed to load album: [$errorCode] ${e.localizedMessage ?: msg}"
+                Log.e("SlideshowViewModel", errorMsg, e)
+                _uiState.value = _uiState.value.copy(
+                    isSyncing = false,
+                    syncStatusMessage = errorMsg
+                )
             }
         }
     }
@@ -706,6 +726,14 @@ class SlideshowViewModel(application: Application) : AndroidViewModel(applicatio
     fun closeLibrary() {
         _uiState.value = _uiState.value.copy(isLibraryOpen = false)
         scheduleHudAutoHide()
+    }
+
+    fun openCoverFlowView() {
+        _uiState.value = _uiState.value.copy(isCoverFlowViewOpen = true)
+    }
+
+    fun closeCoverFlowView() {
+        _uiState.value = _uiState.value.copy(isCoverFlowViewOpen = false)
     }
 
     fun scanUsbStorage() {

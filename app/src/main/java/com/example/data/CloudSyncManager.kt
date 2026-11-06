@@ -34,6 +34,7 @@ class CloudSyncManager(
         .followSslRedirects(true)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(35, TimeUnit.SECONDS)
+        .connectionSpecs(listOf(okhttp3.ConnectionSpec.MODERN_TLS, okhttp3.ConnectionSpec.COMPATIBLE_TLS))
         .build()
 
     companion object {
@@ -46,6 +47,29 @@ class CloudSyncManager(
          */
         fun sanitizeUrl(rawUrl: String): String {
             var url = rawUrl.trim()
+            // Strip smart quotes and invisible control / RTL formatting characters from multi-lingual keyboards
+            url = url.replace("“", "").replace("”", "").replace("‘", "").replace("’", "")
+                .replace("\u200B", "").replace("\u200C", "").replace("\u200D", "")
+                .replace("\u200E", "").replace("\u200F", "").replace("\uFEFF", "")
+
+            // Convert full-width ASCII characters (e.g. from CJK keyboards) to standard half-width ASCII
+            val sb = StringBuilder()
+            for (ch in url) {
+                val code = ch.toInt()
+                if (code in 0xFF01..0xFF5E) {
+                    sb.append((code - 0xFEE0).toChar())
+                } else {
+                    sb.append(ch)
+                }
+            }
+            url = sb.toString()
+
+            // Normalize full-width punctuation variations often produced by language keyboards
+            url = url.replace("：", ":")
+                .replace("／", "/")
+                .replace("．", ".")
+                .replace("，", ",")
+
             if ((url.startsWith("\"") && url.endsWith("\"")) || (url.startsWith("'") && url.endsWith("'"))) {
                 url = url.substring(1, url.length - 1).trim()
             }
@@ -138,10 +162,24 @@ class CloudSyncManager(
                 .header("Accept-Language", "en-US,en;q=0.9")
                 .build()
 
-            val response = client.newCall(request).execute()
+            var response = client.newCall(request).execute()
             if (!response.isSuccessful || response.body == null) {
-                Log.e(TAG, "Album request failed with HTTP ${response.code}")
-                return@withContext emptyList()
+                Log.d(TAG, "Desktop request failed or returned empty, retrying with mobile iOS Safari User-Agent...")
+                val mobileRequest = Request.Builder()
+                    .url(cleanUrl)
+                    .header("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    .build()
+                response = client.newCall(mobileRequest).execute()
+            }
+
+            if (!response.isSuccessful) {
+                val code = response.code
+                throw java.io.IOException("HTTP request failed with status code $code")
+            }
+            if (response.body == null) {
+                throw java.io.IOException("Received empty response body from server")
             }
 
             val finalUrl = response.request.url.toString()
@@ -357,7 +395,7 @@ class CloudSyncManager(
 
                 val outerArray = JSONArray(trimmed)
                 for (i in 0 until outerArray.length()) {
-                    val rpcEnvelope = outerArray.optJSONArray(i) ?: continue
+                    val rpcEnvelope = outerArray.opt(i) as? JSONArray ?: continue
                     val payloadStr = rpcEnvelope.optString(2, "")
                     if (payloadStr.isBlank() || payloadStr == "null") continue
 
@@ -367,7 +405,7 @@ class CloudSyncManager(
                     } catch (e: Exception) {
                         continue
                     }
-                    val itemsArray = innerArray.optJSONArray(0)
+                    val itemsArray = innerArray.opt(0) as? JSONArray
                     val rawToken = innerArray.optString(1, "")
                     if (rawToken.isNotBlank() && rawToken != "null") {
                         nextToken = rawToken
@@ -376,8 +414,8 @@ class CloudSyncManager(
                     if (itemsArray != null) {
                         val weekFormat = SimpleDateFormat("MMM yyyy • 'Week' w", Locale.getDefault())
                         for (j in 0 until itemsArray.length()) {
-                            val item = itemsArray.optJSONArray(j) ?: continue
-                            val subArr = item.optJSONArray(1) ?: continue
+                            val item = itemsArray.opt(j) as? JSONArray ?: continue
+                            val subArr = item.opt(1) as? JSONArray ?: continue
                             val rawUrl = subArr.optString(0, "")
                             if (rawUrl.isBlank() || !rawUrl.startsWith("http")) continue
 
@@ -436,13 +474,13 @@ class CloudSyncManager(
                         try {
                             val rootArray = JSONArray(arrayStr)
                             if (rootArray.length() > 1) {
-                                val itemsArray = rootArray.optJSONArray(1)
+                                val itemsArray = rootArray.opt(1) as? JSONArray
                                 val rawToken = rootArray.optString(2, "")
                                 if (rawToken.isNotBlank() && rawToken != "null") {
                                     continuationToken = rawToken
                                 }
 
-                                val metaArray = rootArray.optJSONArray(3)
+                                val metaArray = rootArray.opt(3) as? JSONArray
                                 if (metaArray != null) {
                                     val keyCandidate = metaArray.optString(0, "")
                                     if (keyCandidate.isNotBlank()) detectedKey = keyCandidate
@@ -453,8 +491,8 @@ class CloudSyncManager(
                                 if (itemsArray != null && itemsArray.length() > 0) {
                                     val weekFormat = SimpleDateFormat("MMM yyyy • 'Week' w", Locale.getDefault())
                                     for (i in 0 until itemsArray.length()) {
-                                        val item = itemsArray.optJSONArray(i) ?: continue
-                                        val subArr = item.optJSONArray(1) ?: continue
+                                        val item = itemsArray.opt(i) as? JSONArray ?: continue
+                                        val subArr = item.opt(1) as? JSONArray ?: continue
                                         val rawUrl = subArr.optString(0, "")
                                         if (rawUrl.isBlank() || !rawUrl.startsWith("http")) continue
 
@@ -546,6 +584,19 @@ class CloudSyncManager(
     private fun extractPhotoKeysWithRegex(html: String, limit: Int): List<String> {
         val seen = mutableSetOf<String>()
         val ordered = mutableListOf<String>()
+
+        // 0. Priority: og:image meta tags
+        val ogImagePattern = Pattern.compile("<meta\\s+property=[\"']og:image[\"']\\s+content=[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE)
+        val ogMatcher = ogImagePattern.matcher(html)
+        while (ogMatcher.find() && ordered.size < limit) {
+            val imgUrl = ogMatcher.group(1)?.trim()
+            if (!imgUrl.isNullOrBlank() && imgUrl.startsWith("http") && !seen.contains(imgUrl)) {
+                val base = imgUrl.substringBefore("=")
+                if (seen.add(base)) {
+                    ordered.add(base)
+                }
+            }
+        }
 
         // 1. First priority: Google Photos /pw/ image keys
         val pwPattern = Pattern.compile("https://lh3\\.googleusercontent\\.com/pw/([a-zA-Z0-9_\\-]+)")

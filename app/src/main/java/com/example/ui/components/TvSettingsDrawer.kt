@@ -116,6 +116,10 @@ fun TvSettingsDrawer(
     albumLinks: List<com.example.model.AlbumLinkItem> = emptyList(),
     onToggleAlbumIncluded: (Long, Boolean) -> Unit = { _, _ -> },
     onRemoveAlbumLink: (com.example.model.AlbumLinkItem) -> Unit = {},
+    onUpdateCoverFlowEnabled: (Boolean) -> Unit = {},
+    onUpdateCoverFlowAngle: (Float) -> Unit = {},
+    onUpdateCoverFlowSpacing: (Float) -> Unit = {},
+    onOpenCoverFlow: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var customCloudUrl by remember { mutableStateOf("") }

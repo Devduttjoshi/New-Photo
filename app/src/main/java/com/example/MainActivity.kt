@@ -11,6 +11,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
+import com.example.ui.LuminaAppRoot
 import com.example.ui.SlideshowViewModel
 import com.example.ui.TvSlideshowScreen
 import com.example.ui.theme.LuminaTvTheme
@@ -37,7 +38,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             LuminaTvTheme {
-                TvSlideshowScreen(viewModel = viewModel)
+                LuminaAppRoot(viewModel = viewModel)
             }
         }
     }

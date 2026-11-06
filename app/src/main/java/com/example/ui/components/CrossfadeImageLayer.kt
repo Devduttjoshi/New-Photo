@@ -150,86 +150,71 @@ private fun RenderPhotoComposite(
                 // 1. Underneath: Ambient zoomed & darkened backdrop filling letterbox/pillarbox
                 AsyncImage(
                     model = ImageRequest.Builder(context)
-                        .data(photo.displayUri)
-                        .crossfade(false)
+                        .data(photo.uri)
+                        .crossfade(true)
                         .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
+                        .alpha(0.35f)
                         .graphicsLayer {
-                            scaleX = 1.25f
-                            scaleY = 1.25f
-                            alpha = 0.35f
+                            scaleX = scale * 1.25f
+                            scaleY = scale * 1.25f
+                            this.translationX = translationX * 2f
                         }
                 )
 
-                // Soft dark gradient overlay over ambient backdrop
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f))
-                )
-
-                // 2. Foreground: 100% full uncropped image centered with subtle Ken Burns drift
+                // 2. Foreground: Crisp image fitting within bounds
                 AsyncImage(
                     model = ImageRequest.Builder(context)
-                        .data(photo.displayUri)
-                        .crossfade(false)
+                        .data(photo.uri)
+                        .crossfade(true)
                         .build(),
                     contentDescription = photo.title,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
+                        .clip(RoundedCornerShape(12.dp))
+                        .shadow(8.dp, RoundedCornerShape(12.dp))
                         .graphicsLayer {
-                            if (kenBurnsEnabled) {
-                                scaleX = scale
-                                scaleY = scale
-                                this.translationX = translationX
-                            }
+                            scaleX = scale
+                            scaleY = scale
+                            this.translationX = translationX
                         }
-                        .shadow(16.dp, RoundedCornerShape(4.dp))
                 )
             }
-
             "FILL_CROP" -> {
-                // Edge-to-edge crop
                 AsyncImage(
                     model = ImageRequest.Builder(context)
-                        .data(photo.displayUri)
-                        .crossfade(false)
+                        .data(photo.uri)
+                        .crossfade(true)
                         .build(),
                     contentDescription = photo.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            if (kenBurnsEnabled) {
-                                scaleX = scale
-                                scaleY = scale
-                                this.translationX = translationX
-                            }
+                            scaleX = scale
+                            scaleY = scale
+                            this.translationX = translationX
                         }
                 )
             }
-
-            else -> {
-                // "BLACK_BARS" (Clean Fit with pure black border)
+            else -> { // "BLACK_BARS"
                 AsyncImage(
                     model = ImageRequest.Builder(context)
-                        .data(photo.displayUri)
-                        .crossfade(false)
+                        .data(photo.uri)
+                        .crossfade(true)
                         .build(),
                     contentDescription = photo.title,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            if (kenBurnsEnabled) {
-                                scaleX = scale
-                                scaleY = scale
-                                this.translationX = translationX
-                            }
+                            scaleX = scale
+                            scaleY = scale
+                            this.translationX = translationX
                         }
                 )
             }

@@ -24,7 +24,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.animation.core.tween
 import com.example.ui.components.AmbientHudOverlay
+import com.example.ui.components.CoverFlowPlaybackView
 import com.example.ui.components.CrossfadeImageLayer
 import com.example.ui.components.TvBrowserScreen
 import com.example.ui.components.TvPhotoLibrarySheet
@@ -229,7 +231,10 @@ fun TvSlideshowScreen(
                 onOpenBrowser = { viewModel.openBrowser(it) },
                 albumLinks = uiState.albumLinks,
                 onToggleAlbumIncluded = { albumId, isIncluded -> viewModel.toggleAlbumIncluded(albumId, isIncluded) },
-                onRemoveAlbumLink = { album -> viewModel.removeAlbumLink(album) }
+                onRemoveAlbumLink = { album -> viewModel.removeAlbumLink(album) },
+                onUpdateCoverFlowEnabled = { viewModel.settingsRepo.updateCoverFlowEnabled(it) },
+                onUpdateCoverFlowAngle = { viewModel.settingsRepo.updateCoverFlowAngle(it) },
+                onUpdateCoverFlowSpacing = { viewModel.settingsRepo.updateCoverFlowSpacing(it) }
             )
         }
 
